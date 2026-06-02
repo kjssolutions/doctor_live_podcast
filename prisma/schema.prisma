@@ -24,45 +24,55 @@ enum RecordingStatus {
   FAILED
 }
 
+enum PostProductionStatus {
+  PROCESSING
+  DONE
+  SPOTIFY
+}
+
 /// MR login — maps to existing tbl_employee
 model Employee {
-  empEmployeeId   String   @id @map("emp_employee_id") @db.VarChar(30)
-  empName         String?  @map("emp_name") @db.VarChar(45)
-  empDesignation  String?  @map("emp_designation") @db.VarChar(100)
-  empUsername     String   @map("emp_username") @db.VarChar(50)
-  empPassword     String   @map("emp_password") @db.VarChar(255)
-  empHeadquarters String?  @map("emp_headquarters") @db.VarChar(255)
-  region          String?  @db.VarChar(100)
-  zone            String?  @db.VarChar(50)
-  l1Manager       String?  @map("l1_manager") @db.VarChar(255)
-  l1ManagerId     String?  @map("l1_manager_id") @db.VarChar(50)
+  empEmployeeId   String        @id @map("emp_employee_id") @db.VarChar(30)
+  empName         String?       @map("emp_name") @db.VarChar(45)
+  empDesignation  String?       @map("emp_designation") @db.VarChar(100)
+  empUsername     String        @map("emp_username") @db.VarChar(50)
+  empPassword     String        @map("emp_password") @db.VarChar(255)
+  empHeadquarters String?       @map("emp_headquarters") @db.VarChar(255)
+  region          String?       @db.VarChar(100)
+  zone            String?       @db.VarChar(50)
+  l1Manager       String?       @map("l1_manager") @db.VarChar(255)
+  l1ManagerId     String?       @map("l1_manager_id") @db.VarChar(50)
   doctors         Doctor[]
+  editedVideos    EditedVideo[]
 
   @@map("tbl_employee")
 }
 
 /// Existing doctor master + podcast link columns (added by setup-local script)
 model Doctor {
-  id                  Int              @id @default(autoincrement())
-  doctorCode          String           @map("doctor_id") @db.VarChar(50)
-  doctorName          String?          @map("doctor_name") @db.VarChar(255)
-  specialty           String?          @map("speciality") @db.VarChar(255)
-  empHeadquarters     String?          @map("emp_headquarters") @db.VarChar(255)
-  region              String?          @db.VarChar(100)
-  l1Manager           String?          @map("l1_manager") @db.VarChar(255)
-  l1ManagerId         String?          @map("l1_manager_id") @db.VarChar(50)
-  imageUrl            String?          @map("image_url") @db.Text
-  interviewToken      String?          @unique @map("interview_token") @db.VarChar(191)
-  interviewStatus     InterviewStatus? @default(SENT) @map("interview_status")
-  createdByEmployeeId String?          @map("created_by_employee_id") @db.VarChar(30)
-  createdBy           Employee?        @relation(fields: [createdByEmployeeId], references: [empEmployeeId], onDelete: SetNull)
-  expiresAt           DateTime?        @map("expires_at")
-  openedAt            DateTime?        @map("opened_at")
-  startedAt           DateTime?        @map("started_at")
-  completedAt         DateTime?        @map("completed_at")
-  podcastCreatedAt    DateTime?        @map("podcast_created_at")
-  podcastUpdatedAt    DateTime?        @updatedAt @map("podcast_updated_at")
+  id                  Int               @id @default(autoincrement())
+  doctorCode          String            @map("doctor_id") @db.VarChar(50)
+  doctorName          String?           @map("doctor_name") @db.VarChar(255)
+  specialty           String?           @map("speciality") @db.VarChar(255)
+  empHeadquarters     String?           @map("emp_headquarters") @db.VarChar(255)
+  region              String?           @db.VarChar(100)
+  l1Manager           String?           @map("l1_manager") @db.VarChar(255)
+  l1ManagerId         String?           @map("l1_manager_id") @db.VarChar(50)
+  imageUrl            String?           @map("image_url") @db.Text
+  interviewToken      String?           @unique @map("interview_token") @db.VarChar(191)
+  interviewStatus     InterviewStatus?  @default(SENT) @map("interview_status")
+  createdByEmployeeId String?           @map("created_by_employee_id") @db.VarChar(30)
+  createdBy           Employee?         @relation(fields: [createdByEmployeeId], references: [empEmployeeId], onDelete: SetNull)
+  expiresAt           DateTime?         @map("expires_at")
+  openedAt            DateTime?         @map("opened_at")
+  startedAt           DateTime?         @map("started_at")
+  completedAt         DateTime?         @map("completed_at")
+  podcastCreatedAt    DateTime?         @map("podcast_created_at")
+  podcastUpdatedAt    DateTime?         @updatedAt @map("podcast_updated_at")
+  postProductionStatus PostProductionStatus @default(PROCESSING) @map("post_production_status")
+  spotifyUrl          String?           @map("spotify_url") @db.Text
   recordings          AnswerRecording[]
+  editedVideo         EditedVideo?
 
   @@index([createdByEmployeeId])
   @@index([doctorCode])
@@ -95,8 +105,25 @@ model Asset {
   durationSeconds Int?              @map("duration_seconds")
   createdAt       DateTime          @default(now()) @map("created_at")
   recordings      AnswerRecording[]
+  editedVideos    EditedVideo[]
 
   @@map("asset_table")
+}
+
+model EditedVideo {
+  id                  String    @id @default(cuid())
+  doctorId            Int       @unique @map("doctor_id")
+  doctor              Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  assetId             String    @map("asset_id")
+  asset               Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdByEmployeeId String?   @map("created_by_employee_id") @db.VarChar(30)
+  createdBy           Employee? @relation(fields: [createdByEmployeeId], references: [empEmployeeId], onDelete: SetNull)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([doctorId])
+  @@index([createdByEmployeeId])
+  @@map("edited_video_table")
 }
 
 model AnswerRecording {

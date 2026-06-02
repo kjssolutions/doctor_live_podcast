@@ -5,14 +5,39 @@ import {
   findActiveQuestion,
   findDoctorForInterviewToken,
 } from "@/lib/recording-upload";
-import { createSignedUploadUrl } from "@/lib/spaces";
+import { uploadObject } from "@/lib/spaces";
 import { signUploadSchema } from "@/lib/validations";
 
+export const runtime = "nodejs";
+
+const MAX_BYTES = 250 * 1024 * 1024;
+
 export async function POST(request: Request) {
-  const parsed = signUploadSchema.safeParse(await request.json());
+  const formData = await request.formData();
+  const token = String(formData.get("token") ?? "");
+  const questionId = String(formData.get("questionId") ?? "");
+  const file = formData.get("file");
+
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "Missing recording file" }, { status: 400 });
+  }
+
+  const mimeType = file.type || "video/webm";
+  const sizeBytes = file.size;
+
+  const parsed = signUploadSchema.safeParse({
+    token,
+    questionId,
+    mimeType,
+    sizeBytes,
+  });
 
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid upload request" }, { status: 400 });
+  }
+
+  if (sizeBytes > MAX_BYTES) {
+    return NextResponse.json({ error: "Recording is too large" }, { status: 413 });
   }
 
   const doctorResult = await findDoctorForInterviewToken(parsed.data.token);
@@ -36,16 +61,17 @@ export async function POST(request: Request) {
     question.id,
     parsed.data.mimeType,
   );
-  const uploadUrl = await createSignedUploadUrl({
+
+  const body = Buffer.from(await file.arrayBuffer());
+  await uploadObject({
     key,
+    body,
     mimeType: parsed.data.mimeType,
   });
 
   return NextResponse.json({
     key,
-    uploadUrl,
-    headers: {
-      "Content-Type": parsed.data.mimeType,
-    },
+    mimeType: parsed.data.mimeType,
+    sizeBytes: parsed.data.sizeBytes,
   });
 }
