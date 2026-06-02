@@ -1,0 +1,120 @@
+// Local DB: ai_old_young uses existing doctor_table + tbl_employee
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum InterviewStatus {
+  DRAFT
+  SENT
+  OPENED
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+enum RecordingStatus {
+  UPLOADING
+  READY
+  FAILED
+}
+
+/// MR login — maps to existing tbl_employee
+model Employee {
+  empEmployeeId   String   @id @map("emp_employee_id") @db.VarChar(30)
+  empName         String?  @map("emp_name") @db.VarChar(45)
+  empDesignation  String?  @map("emp_designation") @db.VarChar(100)
+  empUsername     String   @map("emp_username") @db.VarChar(50)
+  empPassword     String   @map("emp_password") @db.VarChar(255)
+  empHeadquarters String?  @map("emp_headquarters") @db.VarChar(255)
+  region          String?  @db.VarChar(100)
+  zone            String?  @db.VarChar(50)
+  l1Manager       String?  @map("l1_manager") @db.VarChar(255)
+  l1ManagerId     String?  @map("l1_manager_id") @db.VarChar(50)
+  doctors         Doctor[]
+
+  @@map("tbl_employee")
+}
+
+/// Existing doctor master + podcast link columns (added by setup-local script)
+model Doctor {
+  id                  Int              @id @default(autoincrement())
+  doctorCode          String           @map("doctor_id") @db.VarChar(50)
+  doctorName          String?          @map("doctor_name") @db.VarChar(255)
+  specialty           String?          @map("speciality") @db.VarChar(255)
+  empHeadquarters     String?          @map("emp_headquarters") @db.VarChar(255)
+  region              String?          @db.VarChar(100)
+  l1Manager           String?          @map("l1_manager") @db.VarChar(255)
+  l1ManagerId         String?          @map("l1_manager_id") @db.VarChar(50)
+  imageUrl            String?          @map("image_url") @db.Text
+  interviewToken      String?          @unique @map("interview_token") @db.VarChar(191)
+  interviewStatus     InterviewStatus? @default(SENT) @map("interview_status")
+  createdByEmployeeId String?          @map("created_by_employee_id") @db.VarChar(30)
+  createdBy           Employee?        @relation(fields: [createdByEmployeeId], references: [empEmployeeId], onDelete: SetNull)
+  expiresAt           DateTime?        @map("expires_at")
+  openedAt            DateTime?        @map("opened_at")
+  startedAt           DateTime?        @map("started_at")
+  completedAt         DateTime?        @map("completed_at")
+  podcastCreatedAt    DateTime?        @map("podcast_created_at")
+  podcastUpdatedAt    DateTime?        @updatedAt @map("podcast_updated_at")
+  recordings          AnswerRecording[]
+
+  @@index([createdByEmployeeId])
+  @@index([doctorCode])
+  @@index([interviewStatus])
+  @@map("doctor_table")
+}
+
+model Question {
+  id             String            @id @default(cuid())
+  slug           String            @unique @db.VarChar(64)
+  title          String            @db.VarChar(191)
+  prompt         String            @db.Text
+  order          Int               @unique
+  avatarVideoUrl String?           @map("avatar_video_url") @db.Text
+  active         Boolean           @default(true)
+  recordings     AnswerRecording[]
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@map("question_table")
+}
+
+model Asset {
+  id              String            @id @default(cuid())
+  key             String            @unique @db.VarChar(512)
+  bucket          String            @db.VarChar(191)
+  endpoint        String?           @db.Text
+  mimeType        String            @map("mime_type") @db.VarChar(128)
+  sizeBytes       Int               @map("size_bytes")
+  durationSeconds Int?              @map("duration_seconds")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  recordings      AnswerRecording[]
+
+  @@map("asset_table")
+}
+
+model AnswerRecording {
+  id            String          @id @default(cuid())
+  doctorId      Int             @map("doctor_id")
+  doctor        Doctor          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  questionId    String          @map("question_id")
+  question      Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  assetId       String          @map("asset_id")
+  asset         Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  attemptNumber Int             @default(1) @map("attempt_number")
+  status        RecordingStatus @default(READY)
+  acceptedAt    DateTime        @default(now()) @map("accepted_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  @@unique([doctorId, questionId, attemptNumber])
+  @@index([doctorId])
+  @@index([questionId])
+  @@map("answer_recording_table")
+}

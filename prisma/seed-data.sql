@@ -1,0 +1,39 @@
+-- Run on doctor_live_podcast database after tables exist (npx prisma db push)
+-- Or use: npm run prisma:seed
+
+USE doctor_live_podcast;
+
+-- employee_table (20 MR rows + 1 admin)
+INSERT INTO employee_table (
+  emp_employee_id, emp_name, emp_designation, emp_username, emp_password,
+  emp_headquarters, region, zone, l1_manager, l1_manager_id
+) VALUES
+('F001978', 'ANUP KUMAR DEY', 'MR', 'F001978', 'F001978', 'TEZPUR', 'NORTH EAST', 'EAST', 'UTPAL SARMA', 'F017480'),
+('F001979', 'RAHUL SHARMA', 'MR', 'F001979', 'F001979', 'GUWAHATI', 'NORTH EAST', 'EAST', 'UTPAL SARMA', 'F017480'),
+('F001980', 'PRIYA DAS', 'MR', 'F001980', 'F001980', 'SILCHAR', 'NORTH EAST', 'EAST', 'UTPAL SARMA', 'F017480'),
+('F001981', 'VIKASH PATEL', 'MR', 'F001981', 'F001981', 'PATNA', 'EAST', 'EAST', 'AMIT SINGH', 'F017481'),
+('F001982', 'NEHA GUPTA', 'MR', 'F001982', 'F001982', 'RANCHI', 'EAST', 'EAST', 'AMIT SINGH', 'F017481'),
+('F001983', 'SURESH REDDY', 'MR', 'F001983', 'F001983', 'HYDERABAD', 'SOUTH', 'SOUTH', 'KAVITA RAO', 'F017482'),
+('F001984', 'LAKSHMI NAIR', 'MR', 'F001984', 'F001984', 'KOCHI', 'SOUTH', 'SOUTH', 'KAVITA RAO', 'F017482'),
+('F001985', 'ARJUN MEHTA', 'MR', 'F001985', 'F001985', 'MUMBAI', 'WEST', 'WEST', 'SANJAY KULKARNI', 'F017483'),
+('F001986', 'POOJA JOSHI', 'MR', 'F001986', 'F001986', 'PUNE', 'WEST', 'WEST', 'SANJAY KULKARNI', 'F017483'),
+('F001987', 'MANOJ VERMA', 'MR', 'F001987', 'F001987', 'DELHI', 'NORTH', 'NORTH', 'ROHIT MALHOTRA', 'F017484'),
+('F001988', 'KAVITA SINGH', 'MR', 'F001988', 'F001988', 'LUCKNOW', 'NORTH', 'NORTH', 'ROHIT MALHOTRA', 'F017484'),
+('F001989', 'DEEPAK YADAV', 'MR', 'F001989', 'F001989', 'JAIPUR', 'NORTH', 'NORTH', 'ROHIT MALHOTRA', 'F017484'),
+('F001990', 'ANITA ROY', 'MR', 'F001990', 'F001990', 'KOLKATA', 'EAST', 'EAST', 'AMIT SINGH', 'F017481'),
+('F001991', 'HARISH IYER', 'MR', 'F001991', 'F001991', 'CHENNAI', 'SOUTH', 'SOUTH', 'KAVITA RAO', 'F017482'),
+('F001992', 'MEERA KULKARNI', 'MR', 'F001992', 'F001992', 'NAGPUR', 'WEST', 'WEST', 'SANJAY KULKARNI', 'F017483'),
+('F001993', 'ROHIT AGARWAL', 'MR', 'F001993', 'F001993', 'INDORE', 'CENTRAL', 'CENTRAL', 'PRIYA MENON', 'F017485'),
+('F001994', 'SUNITA PILLAI', 'MR', 'F001994', 'F001994', 'BHUBANESWAR', 'EAST', 'EAST', 'AMIT SINGH', 'F017481'),
+('F001995', 'KARAN BHATT', 'MR', 'F001995', 'F001995', 'AHMEDABAD', 'WEST', 'WEST', 'SANJAY KULKARNI', 'F017483'),
+('F001996', 'DIVYA NAIR', 'MR', 'F001996', 'F001996', 'BANGALORE', 'SOUTH', 'SOUTH', 'KAVITA RAO', 'F017482'),
+('F001997', 'ADMIN USER', 'ADMIN', 'ADMIN', 'ADMIN123', 'HQ', 'ALL', 'ALL', 'SYSTEM', 'SYS001')
+ON DUPLICATE KEY UPDATE
+  emp_name = VALUES(emp_name),
+  emp_designation = VALUES(emp_designation),
+  emp_password = VALUES(emp_password),
+  emp_headquarters = VALUES(emp_headquarters),
+  region = VALUES(region),
+  zone = VALUES(zone),
+  l1_manager = VALUES(l1_manager),
+  l1_manager_id = VALUES(l1_manager_id);
