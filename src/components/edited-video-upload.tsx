@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { getVideoDurationFromFile } from "@/lib/video-duration";
+
 export function EditedVideoUpload({ doctorId }: { doctorId: number }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -10,6 +12,10 @@ export function EditedVideoUpload({ doctorId }: { doctorId: number }) {
   const [error, setError] = useState<string | null>(null);
 
   async function upload() {
+    if (isUploading) {
+      return;
+    }
+
     const file = inputRef.current?.files?.[0];
     if (!file) {
       setError("Please choose a video file first.");
@@ -20,9 +26,14 @@ export function EditedVideoUpload({ doctorId }: { doctorId: number }) {
     setIsUploading(true);
 
     try {
+      const durationSeconds = await getVideoDurationFromFile(file);
+
       const formData = new FormData();
       formData.append("doctorId", String(doctorId));
       formData.append("file", file);
+      if (durationSeconds) {
+        formData.append("durationSeconds", String(durationSeconds));
+      }
 
       const response = await fetch("/api/admin/edited-videos/upload", {
         method: "POST",
@@ -31,7 +42,11 @@ export function EditedVideoUpload({ doctorId }: { doctorId: number }) {
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error || "Upload failed.");
+        const hint =
+          response.status === 500 && !data?.error
+            ? " Server may need a restart (stop dev, run npm run dev:clean again)."
+            : "";
+        throw new Error((data?.error || `Upload failed (${response.status}).`) + hint);
       }
 
       if (inputRef.current) {

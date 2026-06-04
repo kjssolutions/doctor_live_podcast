@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.*
+!.env.caprover.example
+deploy.tar
+*.md
+!DEPLOY-CAPROVER.md
+coverage
+.DS_Store
+npm-debug.log*
+.yarn
+.cursor
+terminals
+assets

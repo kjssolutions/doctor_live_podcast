@@ -7,7 +7,7 @@ import { CopyLinkButton } from "@/components/copy-link-button";
 import { RecordingModalPlayer } from "@/components/recording-modal-player";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createSignedDownloadUrl } from "@/lib/spaces";
+import { normalizeStorageUrlForDb } from "@/lib/spaces";
 import {
   formatPostProductionStatus,
   getDisplayPostProductionStatus,
@@ -72,7 +72,7 @@ export default async function DoctorReviewPage({
     requestHeaders,
   );
   const doctorImageUrl = doctor.imageUrl
-    ? await createSignedDownloadUrl(doctor.imageUrl)
+    ? normalizeStorageUrlForDb(doctor.imageUrl)
     : null;
 
   // Fixed 4 question slots

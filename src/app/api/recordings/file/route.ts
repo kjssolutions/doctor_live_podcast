@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSpacesClient, getSpacesConfig } from "@/lib/spaces";
+import { getSpacesClient, getSpacesConfig, parseStorageKey } from "@/lib/spaces";
 
 export const runtime = "nodejs";
 
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
   const result = await client.send(
     new GetObjectCommand({
       Bucket: bucket,
-      Key: recording.asset.key,
+      Key: parseStorageKey(recording.asset.storageUrl),
     }),
   );
 

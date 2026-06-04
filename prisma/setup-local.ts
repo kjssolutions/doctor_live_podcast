@@ -132,6 +132,7 @@ async function createFreshSchema(conn: mariadb.Connection) {
 async function createPodcastTables(conn: mariadb.Connection) {
   await conn.query(`
     CREATE TABLE IF NOT EXISTS question_table (
+      \`number\` INT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE FIRST,
       id VARCHAR(191) NOT NULL,
       slug VARCHAR(64) NOT NULL,
       title VARCHAR(191) NOT NULL,
@@ -150,22 +151,55 @@ async function createPodcastTables(conn: mariadb.Connection) {
 
   await conn.query(`
     CREATE TABLE IF NOT EXISTS asset_table (
+      \`number\` INT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE FIRST,
       id VARCHAR(191) NOT NULL,
-      \`key\` VARCHAR(512) NOT NULL,
-      bucket VARCHAR(191) NOT NULL,
-      endpoint TEXT NULL,
+      doctor_id INT NOT NULL,
+      doctor_code VARCHAR(50) NOT NULL,
+      doctor_name VARCHAR(255) NULL,
+      employee_id VARCHAR(30) NULL,
+      asset_kind ENUM('INTERVIEW_RECORDING','EDITED_VIDEO') NOT NULL DEFAULT 'INTERVIEW_RECORDING',
+      storage_url VARCHAR(1024) NOT NULL,
       mime_type VARCHAR(128) NOT NULL,
       size_bytes INTEGER NOT NULL,
       duration_seconds INTEGER NULL,
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      UNIQUE INDEX asset_table_key_key(\`key\`),
+      UNIQUE INDEX asset_table_storage_url_key(storage_url),
+      INDEX asset_table_doctor_id_idx(doctor_id),
+      INDEX asset_table_doctor_code_idx(doctor_code),
+      INDEX asset_table_employee_id_idx(employee_id),
+      INDEX asset_table_asset_kind_idx(asset_kind),
       PRIMARY KEY (id)
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
   console.log("  asset_table OK");
 
   await conn.query(`
+    CREATE TABLE IF NOT EXISTS edited_video_table (
+      \`number\` INT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE FIRST,
+      id VARCHAR(191) NOT NULL,
+      doctor_id INT NOT NULL,
+      doctor_code VARCHAR(50) NOT NULL,
+      doctor_name VARCHAR(255) NULL,
+      asset_id VARCHAR(191) NOT NULL,
+      created_by_employee_id VARCHAR(30) NULL,
+      storage_url VARCHAR(1024) NOT NULL,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      UNIQUE INDEX edited_video_table_doctor_id_key(doctor_id),
+      INDEX edited_video_table_asset_id_idx(asset_id),
+      PRIMARY KEY (id),
+      CONSTRAINT ev_doctor_fkey FOREIGN KEY (doctor_id) REFERENCES doctor_table(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT ev_asset_fkey FOREIGN KEY (asset_id) REFERENCES asset_table(id) ON DELETE CASCADE ON UPDATE CASCADE
+    ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  console.log("  edited_video_table OK");
+
+  await conn.query(`
     CREATE TABLE IF NOT EXISTS answer_recording_table (
+      \`number\` INT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE FIRST,
+      doctor_code VARCHAR(50) NOT NULL,
+      doctor_name VARCHAR(255) NULL,
+      employee_id VARCHAR(30) NULL,
       id VARCHAR(191) NOT NULL,
       doctor_id INTEGER NOT NULL,
       question_id VARCHAR(191) NOT NULL,

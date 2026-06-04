@@ -1,0 +1,2 @@
+-- Rename row_number to number (first column). CDN URL backfill is done via:
+-- npx tsx scripts/fix-storage-urls-and-rename-number.ts

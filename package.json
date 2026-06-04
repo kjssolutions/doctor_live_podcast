@@ -16,7 +16,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "db:setup-local": "tsx prisma/setup-local.ts",
-    "db:init": "npm run db:setup-local && npm run prisma:seed"
+    "db:init": "npm run db:setup-local && npm run prisma:seed",
+    "deploy:tar": "node scripts/create-deploy-tar.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",

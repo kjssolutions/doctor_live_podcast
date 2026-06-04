@@ -6,22 +6,10 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { uploadObject } from "@/lib/spaces";
+import { buildDoctorImageKey } from "@/lib/storage-keys";
+import { normalizeStorageUrlForDb, uploadObject } from "@/lib/spaces";
 import { createInterviewToken } from "@/lib/tokens";
 import { doctorSchema } from "@/lib/validations";
-
-function imageExtension(file: File) {
-  if (file.type.includes("png")) {
-    return "png";
-  }
-  if (file.type.includes("jpeg") || file.type.includes("jpg")) {
-    return "jpg";
-  }
-  if (file.type.includes("webp")) {
-    return "webp";
-  }
-  return "jpg";
-}
 
 export async function createDoctorInterview(formData: FormData) {
   const session = await getServerSession(authOptions);
@@ -36,20 +24,8 @@ export async function createDoctorInterview(formData: FormData) {
     specialty: formData.get("specialty"),
   });
 
-  let imageUrl: string | null = null;
   const imageFile = formData.get("image");
-
-  if (imageFile instanceof File && imageFile.size > 0) {
-    const extension = imageExtension(imageFile);
-    const key = `doctors/${parsed.doctorCode.trim()}-${Date.now()}.${extension}`;
-    const buffer = Buffer.from(await imageFile.arrayBuffer());
-    await uploadObject({
-      key,
-      body: buffer,
-      mimeType: imageFile.type || "image/jpeg",
-    });
-    imageUrl = key;
-  }
+  const hasImage = imageFile instanceof File && imageFile.size > 0;
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 30);
@@ -58,12 +34,12 @@ export async function createDoctorInterview(formData: FormData) {
     where: { empEmployeeId: session.user.id },
   });
 
-  await prisma.doctor.create({
+  const doctor = await prisma.doctor.create({
     data: {
       doctorCode: parsed.doctorCode,
       doctorName: parsed.doctorName,
       specialty: parsed.specialty,
-      imageUrl,
+      imageUrl: null,
       interviewToken: createInterviewToken(),
       interviewStatus: "SENT",
       createdByEmployeeId: session.user.id,
@@ -75,6 +51,24 @@ export async function createDoctorInterview(formData: FormData) {
       podcastCreatedAt: new Date(),
     },
   });
+
+  if (hasImage && imageFile instanceof File) {
+    const mimeType = imageFile.type || "image/jpeg";
+    const key = buildDoctorImageKey(
+      doctor.id,
+      parsed.doctorName,
+      parsed.doctorCode,
+      mimeType,
+    );
+    const buffer = Buffer.from(await imageFile.arrayBuffer());
+    const storageUrl = normalizeStorageUrlForDb(
+      await uploadObject({ key, body: buffer, mimeType }),
+    );
+    await prisma.doctor.update({
+      where: { id: doctor.id },
+      data: { imageUrl: storageUrl },
+    });
+  }
 
   revalidatePath("/dashboard");
   redirect("/dashboard");

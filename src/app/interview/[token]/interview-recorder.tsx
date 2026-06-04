@@ -379,6 +379,9 @@ export function InterviewRecorder({
           key: uploaded.key,
           mimeType: uploaded.mimeType,
           sizeBytes: uploaded.sizeBytes,
+          ...(recordedDuration > 0
+            ? { durationSeconds: recordedDuration }
+            : {}),
         }),
       });
 

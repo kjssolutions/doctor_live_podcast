@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { doctorAssetSnapshot } from "@/lib/doctor-asset-fields";
 import { getActiveQuestions } from "@/lib/interviews";
 import { prisma } from "@/lib/prisma";
-import { getAssetLocation } from "@/lib/spaces";
+import { isRecordingKeyForDoctor } from "@/lib/recording-upload";
+import { buildStorageUrl, normalizeStorageUrlForDb } from "@/lib/spaces";
 import { finalizeRecordingSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Doctor link not found" }, { status: 404 });
   }
 
-  if (!parsed.data.key.startsWith(`recordings/${doctor.id}/`)) {
+  if (!isRecordingKeyForDoctor(parsed.data.key, doctor.id)) {
     return NextResponse.json({ error: "Upload key mismatch" }, { status: 400 });
   }
 
@@ -57,19 +59,22 @@ export async function POST(request: Request) {
     orderBy: { attemptNumber: "desc" },
     select: { attemptNumber: true },
   });
-  const assetLocation = getAssetLocation();
+  const snapshot = doctorAssetSnapshot(doctor);
+  const { doctorId: _doctorId, ...recordingDoctorFields } = snapshot;
+  const storageUrl = normalizeStorageUrlForDb(buildStorageUrl(parsed.data.key));
 
   const recording = await prisma.answerRecording.create({
     data: {
+      ...recordingDoctorFields,
       doctor: { connect: { id: doctor.id } },
       question: { connect: { id: question.id } },
       attemptNumber: (latestAttempt?.attemptNumber ?? 0) + 1,
       status: "READY",
       asset: {
         create: {
-          key: parsed.data.key,
-          bucket: assetLocation.bucket,
-          endpoint: assetLocation.endpoint,
+          ...snapshot,
+          assetKind: "INTERVIEW_RECORDING",
+          storageUrl,
           mimeType: parsed.data.mimeType,
           sizeBytes: parsed.data.sizeBytes,
           durationSeconds: parsed.data.durationSeconds ?? null,

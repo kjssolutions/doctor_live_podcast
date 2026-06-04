@@ -30,6 +30,11 @@ enum PostProductionStatus {
   SPOTIFY
 }
 
+enum AssetKind {
+  INTERVIEW_RECORDING
+  EDITED_VIDEO
+}
+
 /// MR login — maps to existing tbl_employee
 model Employee {
   empEmployeeId   String        @id @map("emp_employee_id") @db.VarChar(30)
@@ -81,6 +86,7 @@ model Doctor {
 }
 
 model Question {
+  number         Int               @unique @default(autoincrement()) @map("number")
   id             String            @id @default(cuid())
   slug           String            @unique @db.VarChar(64)
   title          String            @db.VarChar(191)
@@ -96,10 +102,14 @@ model Question {
 }
 
 model Asset {
+  number          Int               @unique @default(autoincrement()) @map("number")
   id              String            @id @default(cuid())
-  key             String            @unique @db.VarChar(512)
-  bucket          String            @db.VarChar(191)
-  endpoint        String?           @db.Text
+  doctorId        Int               @map("doctor_id")
+  doctorCode      String            @map("doctor_code") @db.VarChar(50)
+  doctorName      String?           @map("doctor_name") @db.VarChar(255)
+  employeeId      String?           @map("employee_id") @db.VarChar(30)
+  assetKind       AssetKind         @default(INTERVIEW_RECORDING) @map("asset_kind")
+  storageUrl      String            @unique @map("storage_url") @db.VarChar(1024)
   mimeType        String            @map("mime_type") @db.VarChar(128)
   sizeBytes       Int               @map("size_bytes")
   durationSeconds Int?              @map("duration_seconds")
@@ -107,17 +117,25 @@ model Asset {
   recordings      AnswerRecording[]
   editedVideos    EditedVideo[]
 
+  @@index([doctorId])
+  @@index([doctorCode])
+  @@index([employeeId])
+  @@index([assetKind])
   @@map("asset_table")
 }
 
 model EditedVideo {
+  number              Int       @unique @default(autoincrement()) @map("number")
   id                  String    @id @default(cuid())
   doctorId            Int       @unique @map("doctor_id")
   doctor              Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorCode          String    @map("doctor_code") @db.VarChar(50)
+  doctorName          String?   @map("doctor_name") @db.VarChar(255)
   assetId             String    @map("asset_id")
   asset               Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
   createdByEmployeeId String?   @map("created_by_employee_id") @db.VarChar(30)
   createdBy           Employee? @relation(fields: [createdByEmployeeId], references: [empEmployeeId], onDelete: SetNull)
+  storageUrl          String    @map("storage_url") @db.VarChar(1024)
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
@@ -127,6 +145,10 @@ model EditedVideo {
 }
 
 model AnswerRecording {
+  number        Int             @unique @default(autoincrement()) @map("number")
+  doctorCode    String          @map("doctor_code") @db.VarChar(50)
+  doctorName    String?         @map("doctor_name") @db.VarChar(255)
+  employeeId    String?         @map("employee_id") @db.VarChar(30)
   id            String          @id @default(cuid())
   doctorId      Int             @map("doctor_id")
   doctor        Doctor          @relation(fields: [doctorId], references: [id], onDelete: Cascade)

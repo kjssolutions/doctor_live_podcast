@@ -34,18 +34,17 @@ export async function POST(request: Request) {
   const key = buildRecordingKey(
     doctorResult.doctor.id,
     question.id,
+    question.order,
     parsed.data.mimeType,
   );
-  const uploadUrl = await createSignedUploadUrl({
+  const signed = await createSignedUploadUrl({
     key,
     mimeType: parsed.data.mimeType,
   });
 
   return NextResponse.json({
     key,
-    uploadUrl,
-    headers: {
-      "Content-Type": parsed.data.mimeType,
-    },
+    uploadUrl: signed.uploadUrl,
+    headers: signed.headers,
   });
 }
