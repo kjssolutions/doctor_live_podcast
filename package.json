@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
+    "dev:clean": "node scripts/rm-next.mjs && next dev -H 0.0.0.0",
     "dev:https": "next dev -H 0.0.0.0 --experimental-https",
     "dev:https:lan": "node scripts/dev-https-lan.mjs",
     "dev:tunnel": "node scripts/dev-tunnel.mjs",

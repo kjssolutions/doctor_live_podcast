@@ -55,9 +55,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
   }
 
-  // Rules:
-  // - Without merged video upload, nobody can set DONE/SPOTIFY.
-  // - Without merged video upload, spotifyUrl cannot be saved (keeps workflow consistent).
+  const effectiveSpotifyUrl =
+    spotifyUrl !== undefined ? spotifyUrl : doctor.spotifyUrl;
+
   if (!doctor.editedVideo) {
     if (status === "DONE" || status === "SPOTIFY") {
       return NextResponse.json(
@@ -73,7 +73,6 @@ export async function PATCH(request: Request) {
     }
   }
 
-  // Validate spotifyUrl format whenever it is being set.
   if (spotifyUrl !== undefined && spotifyUrl) {
     if (!/^https?:\/\//i.test(spotifyUrl)) {
       return NextResponse.json(
@@ -83,26 +82,52 @@ export async function PATCH(request: Request) {
     }
   }
 
-  // If setting status SPOTIFY, require a spotifyUrl (either incoming or already saved).
-  if (status === "SPOTIFY") {
-    const nextUrl = spotifyUrl !== undefined ? spotifyUrl : doctor.spotifyUrl;
-    if (!nextUrl) {
-      return NextResponse.json(
-        { error: "Spotify URL is required when status is SPOTIFY." },
-        { status: 400 },
-      );
+  // Hierarchy: Processing → Done → Spotify. Cannot step down while URL exists.
+  if (
+    effectiveSpotifyUrl &&
+    (status === "DONE" || status === "PROCESSING")
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Cannot change to Processing or Done while Spotify URL exists. Remove the link first.",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (status === "SPOTIFY" && !effectiveSpotifyUrl) {
+    return NextResponse.json(
+      { error: "Spotify URL is required when status is SPOTIFY." },
+      { status: 400 },
+    );
+  }
+
+  const data: {
+    postProductionStatus?: "PROCESSING" | "DONE" | "SPOTIFY";
+    spotifyUrl?: string | null;
+  } = {};
+
+  if (spotifyUrl !== undefined) {
+    data.spotifyUrl = spotifyUrl;
+    if (spotifyUrl) {
+      // Saving a link always moves workflow to Spotify.
+      data.postProductionStatus = "SPOTIFY";
+    } else if (doctor.postProductionStatus === "SPOTIFY") {
+      // Clearing link after publish → back to Done.
+      data.postProductionStatus = "DONE";
     }
+  }
+
+  if (status !== undefined) {
+    data.postProductionStatus = status as "PROCESSING" | "DONE" | "SPOTIFY";
   }
 
   const updated = await prisma.doctor.update({
     where: { id: doctorId },
-    data: {
-      ...(status !== undefined ? { postProductionStatus: status as any } : {}),
-      ...(spotifyUrl !== undefined ? { spotifyUrl } : {}),
-    },
+    data,
     select: { id: true, postProductionStatus: true, spotifyUrl: true },
   });
 
   return NextResponse.json(updated);
 }
-

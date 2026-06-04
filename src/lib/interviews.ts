@@ -13,6 +13,7 @@ export async function getDoctorByInterviewToken(token: string) {
     include: {
       recordings: {
         where: { status: "READY" },
+        distinct: ["questionId"],
         select: { questionId: true },
       },
     },

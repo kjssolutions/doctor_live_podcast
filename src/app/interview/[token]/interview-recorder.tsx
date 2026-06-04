@@ -26,6 +26,14 @@ type Doctor = {
 
 type UploadState = "idle" | "uploading" | "done" | "error";
 
+function findFirstPendingQuestionIndex(
+  questions: Question[],
+  accepted: Set<string>,
+) {
+  const index = questions.findIndex((q) => !accepted.has(q.id));
+  return index >= 0 ? index : 0;
+}
+
 function getSupportedVideoMimeType() {
   const options = [
     "video/webm;codecs=vp8,opus",
@@ -48,8 +56,18 @@ export function InterviewRecorder({
   questions: Question[];
   completedQuestionIds: string[];
 }) {
+  const initialAccepted = useMemo(
+    () => new Set(completedQuestionIds),
+    [completedQuestionIds],
+  );
+  const pendingCount = questions.length - initialAccepted.size;
+  const hasPartialProgress =
+    initialAccepted.size > 0 && pendingCount > 0;
+
   const [started, setStarted] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() =>
+    findFirstPendingQuestionIndex(questions, initialAccepted),
+  );
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   // True between "Stop" press and recorder.onstop — prevents showing live camera
@@ -65,9 +83,8 @@ export function InterviewRecorder({
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const recordingSecondsRef = useRef(0);
-  const [acceptedQuestionIds, setAcceptedQuestionIds] = useState(
-    () => new Set(completedQuestionIds),
-  );
+  const [acceptedQuestionIds, setAcceptedQuestionIds] =
+    useState(initialAccepted);
 
   // Single video element for both live camera and recorded playback.
   // We swap between srcObject (live) and src (recorded) imperatively so React
@@ -375,12 +392,7 @@ export function InterviewRecorder({
       setUploadState("done");
       retake();
 
-      const nextIndex = questions.findIndex((question, index) => {
-        return index > currentIndex && !nextAccepted.has(question.id);
-      });
-      if (nextIndex >= 0) {
-        setCurrentIndex(nextIndex);
-      }
+      setCurrentIndex(findFirstPendingQuestionIndex(questions, nextAccepted));
     } catch (uploadError) {
       setUploadState("error");
       setError(
@@ -402,9 +414,16 @@ export function InterviewRecorder({
             Welcome, {doctor.name}
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-300">
-            You will hear each podcast question, then record your answer on video.
-            You can replay and retake before submitting.
+            {hasPartialProgress
+              ? `You already submitted ${initialAccepted.size} of ${questions.length} answers. Continue from question ${currentIndex + 1} — only pending questions remain.`
+              : "You will hear each podcast question, then record your answer on video. You can replay and retake before submitting."}
           </p>
+          {hasPartialProgress ? (
+            <p className="mt-3 rounded-xl bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+              Your previous answers are saved. If the connection dropped, tap below
+              to resume where you left off.
+            </p>
+          ) : null}
           {doctor.specialty ? (
             <p className="mt-2 text-sm text-slate-500">{doctor.specialty}</p>
           ) : null}
@@ -428,7 +447,11 @@ export function InterviewRecorder({
             }}
             type="button"
           >
-            {isStarting ? "Opening camera…" : "Start interview"}
+            {isStarting
+              ? "Opening camera…"
+              : hasPartialProgress
+                ? "Continue interview"
+                : "Start interview"}
           </button>
           <p className="mt-2 text-center text-xs text-slate-500">
             Tap the button above. Allow camera and microphone when asked.

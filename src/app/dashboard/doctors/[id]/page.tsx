@@ -8,6 +8,10 @@ import { RecordingModalPlayer } from "@/components/recording-modal-player";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createSignedDownloadUrl } from "@/lib/spaces";
+import {
+  formatPostProductionStatus,
+  getDisplayPostProductionStatus,
+} from "@/lib/post-production";
 import { absoluteUrlFromRequest } from "@/lib/utils";
 
 export default async function DoctorReviewPage({
@@ -77,6 +81,11 @@ export default async function DoctorReviewPage({
     const rec = latestRecordings.find((r) => r.question.order === i + 1) ?? null;
     return rec;
   });
+
+  const displayPostProductionStatus = getDisplayPostProductionStatus(
+    doctor.postProductionStatus,
+    doctor.spotifyUrl,
+  );
 
   return (
     <div className="space-y-5">
@@ -167,11 +176,7 @@ export default async function DoctorReviewPage({
                 {/* Post-production status from admin */}
                 <td className="whitespace-nowrap">
                   <span className="inline-block rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-200">
-                    {doctor.postProductionStatus === "PROCESSING"
-                      ? "Processing"
-                      : doctor.postProductionStatus === "DONE"
-                        ? "Done"
-                        : "Spotify"}
+                    {formatPostProductionStatus(displayPostProductionStatus)}
                   </span>
                 </td>
 

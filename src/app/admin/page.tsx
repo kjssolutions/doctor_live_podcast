@@ -2,8 +2,7 @@ import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { DoctorPostProductionControls } from "@/components/doctor-post-production-controls";
-import { DoctorSpotifyUrlControls } from "@/components/doctor-spotify-url-controls";
+import { DoctorProductionCells } from "@/components/doctor-production-cells";
 import { RecordingModalPlayer } from "@/components/recording-modal-player";
 import { EditedVideoUpload } from "@/components/edited-video-upload";
 import { authOptions } from "@/lib/auth";
@@ -158,20 +157,12 @@ export default async function AdminPage() {
                         </div>
                       )}
                     </td>
-                    <td className="min-w-[360px]">
-                      <DoctorSpotifyUrlControls
-                        doctorId={doctor.id}
-                        hasMergedVideo={Boolean(doctor.editedVideo)}
-                        initialSpotifyUrl={doctor.spotifyUrl}
-                      />
-                    </td>
-                    <td className="min-w-[300px]">
-                      <DoctorPostProductionControls
-                        doctorId={doctor.id}
-                        hasMergedVideo={Boolean(doctor.editedVideo)}
-                        initialStatus={doctor.postProductionStatus}
-                      />
-                    </td>
+                    <DoctorProductionCells
+                      doctorId={doctor.id}
+                      hasMergedVideo={Boolean(doctor.editedVideo)}
+                      initialSpotifyUrl={doctor.spotifyUrl}
+                      initialStatus={doctor.postProductionStatus}
+                    />
                   </tr>
                 );
               })}

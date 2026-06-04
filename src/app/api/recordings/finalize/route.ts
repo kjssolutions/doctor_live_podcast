@@ -32,6 +32,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
   }
 
+  const existingReady = await prisma.answerRecording.findFirst({
+    where: {
+      doctorId: doctor.id,
+      questionId: question.id,
+      status: "READY",
+    },
+    orderBy: { attemptNumber: "desc" },
+    select: { id: true },
+  });
+
+  if (existingReady) {
+    return NextResponse.json({
+      recordingId: existingReady.id,
+      alreadySubmitted: true,
+    });
+  }
+
   const latestAttempt = await prisma.answerRecording.findFirst({
     where: {
       doctorId: doctor.id,

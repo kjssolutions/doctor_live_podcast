@@ -53,11 +53,13 @@ export default async function PublicInterviewPage({
     );
   }
 
+  const completedQuestionIds = doctor.recordings.map(
+    (recording) => recording.questionId,
+  );
+
   return (
     <InterviewRecorderLoader
-      completedQuestionIds={doctor.recordings.map(
-        (recording) => recording.questionId,
-      )}
+      completedQuestionIds={completedQuestionIds}
       doctor={{
         name: doctor.doctorName ?? doctor.doctorCode,
         specialty: doctor.specialty,
