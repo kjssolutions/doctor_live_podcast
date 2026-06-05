@@ -93,6 +93,7 @@ export function InterviewRecorder({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPreviewRequested, setIsPreviewRequested] = useState(false);
   const recordingSecondsRef = useRef(0);
   const [acceptedQuestionIds, setAcceptedQuestionIds] =
     useState(initialAccepted);
@@ -214,14 +215,18 @@ export function InterviewRecorder({
     video.addEventListener("pause", onPause);
 
     if (previewUrl) {
-      // Show the recorded clip.
+      // Show the recorded clip paused until the user taps Preview.
       video.srcObject = null;
       video.src = previewUrl;
       video.muted = false;
       video.load();
-      void video.play().catch(() => {
-        // Controls allow manual play if autoplay is blocked.
-      });
+      if (isPreviewRequested) {
+        void video.play().catch(() => {
+          // Overlay play button allows manual play if autoplay is blocked.
+        });
+      } else {
+        video.pause();
+      }
     } else if (stream) {
       // Show the live camera.
       video.pause();
@@ -237,7 +242,7 @@ export function InterviewRecorder({
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
     };
-  }, [stream, previewUrl]);
+  }, [stream, previewUrl, isPreviewRequested]);
 
   // Stop camera tracks ONLY on unmount — never during retake or question changes.
   useEffect(() => {
@@ -338,6 +343,7 @@ export function InterviewRecorder({
 
     setError(null);
     setIsProcessing(false);
+    setIsPreviewRequested(false);
     setRecordedBlob(null);
 
     // Revoke any previous clip URL and clear the video src so we return to live.
@@ -397,6 +403,7 @@ export function InterviewRecorder({
 
       setRecordedDuration(recordingSecondsRef.current);
       setRecordedBlob(blob);
+      setIsPreviewRequested(false);
       setPreviewUrl(URL.createObjectURL(blob));
     };
 
@@ -425,12 +432,22 @@ export function InterviewRecorder({
     setIsProcessing(true); // hold UI until onstop fires
   }
 
+  function previewRecording() {
+    setIsPreviewRequested(true);
+    const video = videoRef.current;
+    if (video) {
+      video.currentTime = 0;
+      void video.play().catch(() => {});
+    }
+  }
+
   function retake() {
     // Do not stop the stream — just discard the recorded clip.
     setRecordedBlob(null);
     setUploadState("idle");
     setError(null);
     setIsProcessing(false);
+    setIsPreviewRequested(false);
     setRecordedDuration(0);
     setRecordingSeconds(0);
 
@@ -661,8 +678,8 @@ export function InterviewRecorder({
               </div>
             ) : null}
 
-            {/* Play / Pause overlay — only on recorded clip, centred */}
-            {previewUrl && !isProcessing ? (
+            {/* Play / Pause overlay — only after user taps Preview */}
+            {previewUrl && !isProcessing && isPreviewRequested ? (
               <button
                 aria-label={isPlaying ? "Pause" : "Play"}
                 className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 focus:opacity-100"
@@ -697,7 +714,8 @@ export function InterviewRecorder({
 
           {recordedBlob && !isRecording && !isProcessing ? (
             <p className="text-sm text-slate-400">
-              Preview your answer above. Retake if needed, or accept to continue.
+              Tap Preview to watch your recording. Retake if needed, or accept to
+              continue.
             </p>
           ) : null}
 
@@ -730,6 +748,14 @@ export function InterviewRecorder({
             {recordedBlob && !isProcessing ? (
               <>
                 <button
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 font-semibold text-slate-950 hover:bg-cyan-300"
+                  onClick={previewRecording}
+                  type="button"
+                >
+                  <Play className="h-4 w-4" />
+                  Preview
+                </button>
+                <button
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 font-semibold hover:bg-white/10"
                   onClick={retake}
                   type="button"
@@ -738,7 +764,7 @@ export function InterviewRecorder({
                   Retake
                 </button>
                 <button
-                  className="rounded-xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 hover:bg-emerald-300 disabled:opacity-60"
+                  className="rounded-xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 hover:bg-emerald-300 disabled:opacity-60 sm:col-span-2"
                   disabled={uploadState === "uploading"}
                   onClick={() => void acceptAnswer()}
                   type="button"

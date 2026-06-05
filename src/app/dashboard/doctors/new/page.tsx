@@ -16,11 +16,7 @@ export default function NewDoctorPage() {
           saved in the doctor table.
         </p>
 
-        <form
-          action={createDoctorInterview}
-          className="mt-8 grid gap-5"
-          encType="multipart/form-data"
-        >
+        <form action={createDoctorInterview} className="mt-8 grid gap-5">
           <div>
             <label className="text-sm font-medium" htmlFor="doctorName">
               Doctor name

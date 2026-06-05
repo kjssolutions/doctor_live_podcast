@@ -34,7 +34,7 @@ export function CopyLinkButton({ url }: { url: string }) {
   return (
     <div className="flex flex-col items-start gap-1">
       <button
-        className="inline-flex items-center gap-2 rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-300"
+        className="inline-flex w-[11rem] items-center justify-center gap-2 rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-300"
         onClick={copyLink}
         type="button"
       >

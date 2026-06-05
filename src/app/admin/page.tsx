@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 
 import { DoctorProductionCells } from "@/components/doctor-production-cells";
 import { RecordingModalPlayer } from "@/components/recording-modal-player";
+import { EditedVideoDeleteButton } from "@/components/edited-video-delete-button";
 import { EditedVideoUpload } from "@/components/edited-video-upload";
+import { RecordingDeleteButton } from "@/components/recording-delete-button";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -117,6 +119,11 @@ export default async function AdminPage() {
                                 >
                                   Download
                                 </a>
+                                <RecordingDeleteButton
+                                  doctorLabel={doctor.doctorName ?? doctor.doctorCode}
+                                  questionLabel={title}
+                                  recordingId={r.id}
+                                />
                               </div>
                             </div>
                           );
@@ -144,6 +151,10 @@ export default async function AdminPage() {
                             >
                               Download
                             </a>
+                            <EditedVideoDeleteButton
+                              doctorId={doctor.id}
+                              doctorLabel={doctor.doctorName ?? doctor.doctorCode}
+                            />
                           </div>
                         </div>
                       ) : (

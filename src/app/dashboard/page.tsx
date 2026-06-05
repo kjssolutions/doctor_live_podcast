@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { DownloadFlyerButton } from "@/components/download-flyer-button";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { absoluteUrlFromRequest } from "@/lib/utils";
@@ -72,6 +73,7 @@ export default async function DashboardPage() {
                 `/interview/${doctor.interviewToken}`,
                 requestHeaders,
               );
+              const allVideosRecorded = doctor.interviewStatus === "COMPLETED";
               return (
                 <article
                   className="grid gap-4 px-6 py-5 lg:grid-cols-[1fr_auto_auto]"
@@ -99,7 +101,11 @@ export default async function DashboardPage() {
                     {doctor.recordings.length} recordings
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <CopyLinkButton url={url} />
+                    {allVideosRecorded ? (
+                      <DownloadFlyerButton />
+                    ) : (
+                      <CopyLinkButton url={url} />
+                    )}
                     <Link
                       className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
                       href={`/dashboard/doctors/${doctor.id}`}

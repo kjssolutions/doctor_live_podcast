@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectAclCommand,
   PutObjectCommand,
@@ -227,6 +228,19 @@ export async function createSignedUploadUrl(input: {
       ...(acl ? { "x-amz-acl": acl } : {}),
     },
   };
+}
+
+export async function deleteObject(storageUrlOrKey: string) {
+  const key = parseStorageKey(storageUrlOrKey);
+  const { bucket } = getSpacesConfig();
+  const client = getSpacesClient();
+
+  await client.send(
+    new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+  );
 }
 
 export async function createSignedDownloadUrl(storageUrlOrKey: string) {
