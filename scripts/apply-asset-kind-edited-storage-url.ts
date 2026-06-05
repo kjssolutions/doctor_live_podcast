@@ -6,6 +6,9 @@ import "dotenv/config";
 
 import * as mariadb from "mariadb";
 
+import { tableExists } from "./doctor-schema-utils";
+import { getMariaDbConfig } from "./mariadb-config";
+
 async function columnExists(
   conn: mariadb.Connection,
   table: string,
@@ -20,13 +23,7 @@ async function columnExists(
 }
 
 async function main() {
-  const conn = await mariadb.createConnection({
-    host: process.env.MYSQL_HOST ?? "localhost",
-    port: Number(process.env.MYSQL_PORT ?? 3306),
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DB,
-  });
+  const conn = await mariadb.createConnection(getMariaDbConfig());
 
   if (!(await columnExists(conn, "asset_table", "asset_kind"))) {
     await conn.query(`
@@ -37,11 +34,13 @@ async function main() {
     console.log("  ✓ asset_table.asset_kind added");
   }
 
-  await conn.query(`
-    UPDATE asset_table a
-    INNER JOIN edited_video_table e ON e.asset_id = a.id
-    SET a.asset_kind = 'EDITED_VIDEO'
-  `);
+  if (await tableExists(conn, "edited_video_table")) {
+    await conn.query(`
+      UPDATE asset_table a
+      INNER JOIN edited_video_table e ON e.asset_id = a.id
+      SET a.asset_kind = 'EDITED_VIDEO'
+    `);
+  }
 
   await conn.query(`
     UPDATE asset_table SET asset_kind = 'INTERVIEW_RECORDING'
@@ -56,7 +55,10 @@ async function main() {
 
   console.log("  ✓ asset_kind backfilled");
 
-  if (!(await columnExists(conn, "edited_video_table", "storage_url"))) {
+  if (
+    (await tableExists(conn, "edited_video_table")) &&
+    !(await columnExists(conn, "edited_video_table", "storage_url"))
+  ) {
     await conn.query(`
       ALTER TABLE edited_video_table
         ADD COLUMN storage_url VARCHAR(1024) NULL AFTER created_by_employee_id
@@ -64,19 +66,21 @@ async function main() {
     console.log("  ✓ edited_video_table.storage_url added");
   }
 
-  await conn.query(`
-    UPDATE edited_video_table e
-    INNER JOIN asset_table a ON a.id = e.asset_id
-    SET e.storage_url = a.storage_url
-    WHERE e.storage_url IS NULL OR e.storage_url = ''
-  `);
+  if (await tableExists(conn, "edited_video_table")) {
+    await conn.query(`
+      UPDATE edited_video_table e
+      INNER JOIN asset_table a ON a.id = e.asset_id
+      SET e.storage_url = a.storage_url
+      WHERE e.storage_url IS NULL OR e.storage_url = ''
+    `);
 
-  await conn.query(`
-    ALTER TABLE edited_video_table
-      MODIFY storage_url VARCHAR(1024) NOT NULL
-  `);
+    await conn.query(`
+      ALTER TABLE edited_video_table
+        MODIFY storage_url VARCHAR(1024) NOT NULL
+    `);
 
-  console.log("  ✓ edited_video storage_url backfilled from assets");
+    console.log("  ✓ edited_video storage_url backfilled from assets");
+  }
 
   await conn.end();
   console.log("\nDone. Run: npx prisma generate — then restart dev server.");

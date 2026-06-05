@@ -6,14 +6,10 @@ import "dotenv/config";
 
 import * as mariadb from "mariadb";
 
+import { getMariaDbConfig } from "./mariadb-config";
+
 async function main() {
-  const conn = await mariadb.createConnection({
-    host: process.env.MYSQL_HOST ?? "localhost",
-    port: Number(process.env.MYSQL_PORT ?? 3306),
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DB,
-  });
+  const conn = await mariadb.createConnection(getMariaDbConfig());
 
   await conn.query(`
     ALTER TABLE answer_recording_table

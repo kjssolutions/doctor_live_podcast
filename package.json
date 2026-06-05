@@ -17,6 +17,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "db:setup-local": "tsx prisma/setup-local.ts",
     "db:init": "npm run db:setup-local && npm run prisma:seed",
+    "db:migrate-live": "tsx scripts/run-live-migrations.ts",
     "deploy:tar": "node scripts/create-deploy-tar.mjs"
   },
   "dependencies": {

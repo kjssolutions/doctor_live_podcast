@@ -10,6 +10,8 @@ import * as mariadb from "mariadb";
 
 import { buildStorageUrl, fixStorageUrlHost, parseStorageKey } from "../src/lib/spaces";
 
+import { getMariaDbConfig } from "./mariadb-config";
+
 const TABLES = [
   "question_table",
   "asset_table",
@@ -63,13 +65,7 @@ function fixUrl(value: string | null) {
 }
 
 async function main() {
-  const conn = await mariadb.createConnection({
-    host: process.env.MYSQL_HOST ?? "localhost",
-    port: Number(process.env.MYSQL_PORT ?? 3306),
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DB,
-  });
+  const conn = await mariadb.createConnection(getMariaDbConfig());
 
   console.log("Renaming row_number → number...");
   for (const table of TABLES) {

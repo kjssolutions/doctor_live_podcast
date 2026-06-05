@@ -2,7 +2,7 @@
 
 import { MobileCameraHelp } from "@/app/interview/[token]/mobile-camera-help";
 import { describeCameraBlocker } from "@/lib/camera-access";
-import { CheckCircle2, CircleStop, Loader2, Pause, Play, RotateCcw, Timer, Video } from "lucide-react";
+import { CheckCircle2, CircleStop, Loader2, Pause, Play, RotateCcw, Timer } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 function formatSeconds(s: number) {
@@ -10,6 +10,9 @@ function formatSeconds(s: number) {
   const sec = s % 60;
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
+
+const PORTRAIT_WIDTH = 1080;
+const PORTRAIT_HEIGHT = 1920;
 
 type Question = {
   id: string;
@@ -25,6 +28,13 @@ type Doctor = {
 };
 
 type UploadState = "idle" | "uploading" | "done" | "error";
+
+function getQuestionVideoSrc(question: Question) {
+  if (question.avatarVideoUrl) {
+    return question.avatarVideoUrl;
+  }
+  return `/Videos/question${question.order}.mp4`;
+}
 
 function findFirstPendingQuestionIndex(
   questions: Question[],
@@ -78,6 +88,7 @@ export function InterviewRecorder({
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [isPreparingCamera, setIsPreparingCamera] = useState(false);
   const [isSecureContext] = useState(() => window.isSecureContext);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedDuration, setRecordedDuration] = useState(0);
@@ -93,11 +104,79 @@ export function InterviewRecorder({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const recordingMimeTypeRef = useRef("");
+  const rawStreamRef = useRef<MediaStream | null>(null);
+  const captureStreamRef = useRef<MediaStream | null>(null);
+  const canvasVideoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasAnimationRef = useRef<number | null>(null);
   // Stable ref so the unmount-only cleanup can stop tracks without stream in deps.
   const streamRef = useRef<MediaStream | null>(null);
   useEffect(() => {
     streamRef.current = stream;
   }, [stream]);
+
+  function stopPortraitPipeline() {
+    if (canvasAnimationRef.current !== null) {
+      cancelAnimationFrame(canvasAnimationRef.current);
+      canvasAnimationRef.current = null;
+    }
+    canvasVideoRef.current?.pause();
+    canvasVideoRef.current = null;
+    captureStreamRef.current?.getTracks().forEach((track) => track.stop());
+    captureStreamRef.current = null;
+  }
+
+  async function createPortraitRecordingStream(
+    sourceStream: MediaStream,
+  ): Promise<MediaStream> {
+    const sourceVideo = document.createElement("video");
+    sourceVideo.srcObject = sourceStream;
+    sourceVideo.muted = true;
+    sourceVideo.playsInline = true;
+    sourceVideo.autoplay = true;
+    canvasVideoRef.current = sourceVideo;
+
+    try {
+      await sourceVideo.play();
+    } catch {
+      // play() may fail before metadata is ready; drawing loop below still retries.
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = PORTRAIT_WIDTH;
+    canvas.height = PORTRAIT_HEIGHT;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Could not prepare portrait recorder.");
+    }
+
+    const drawFrame = () => {
+      const sourceWidth = sourceVideo.videoWidth || 1280;
+      const sourceHeight = sourceVideo.videoHeight || 720;
+      const scale = Math.max(
+        PORTRAIT_WIDTH / sourceWidth,
+        PORTRAIT_HEIGHT / sourceHeight,
+      );
+      const drawWidth = sourceWidth * scale;
+      const drawHeight = sourceHeight * scale;
+      const offsetX = (PORTRAIT_WIDTH - drawWidth) / 2;
+      const offsetY = (PORTRAIT_HEIGHT - drawHeight) / 2;
+
+      ctx.clearRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+      ctx.drawImage(sourceVideo, offsetX, offsetY, drawWidth, drawHeight);
+      canvasAnimationRef.current = requestAnimationFrame(drawFrame);
+    };
+
+    drawFrame();
+
+    const portraitStream = canvas.captureStream(30);
+    const audioTrack = sourceStream.getAudioTracks()[0];
+    if (audioTrack) {
+      portraitStream.addTrack(audioTrack);
+    }
+
+    captureStreamRef.current = portraitStream;
+    return portraitStream;
+  }
 
   // Count up every second while recording.
   useEffect(() => {
@@ -163,6 +242,8 @@ export function InterviewRecorder({
   // Stop camera tracks ONLY on unmount — never during retake or question changes.
   useEffect(() => {
     return () => {
+      stopPortraitPipeline();
+      rawStreamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -185,22 +266,46 @@ export function InterviewRecorder({
     }
 
     try {
+      setStarted(true);
+      await fetch(`/api/interviews/${token}/start`, { method: "POST" });
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
+  async function ensureCameraStream() {
+    const activeTracks = stream?.getTracks() ?? [];
+    if (
+      stream &&
+      activeTracks.length > 0 &&
+      activeTracks.every((track) => track.readyState === "live")
+    ) {
+      return stream;
+    }
+
+    try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
-          width: { ideal: 720 },
-          height: { ideal: 1280 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          aspectRatio: { ideal: 9 / 16 },
+          resizeMode: "crop-and-scale",
         },
         audio: true,
       });
-      setStream(mediaStream);
-      setStarted(true);
-      await fetch(`/api/interviews/${token}/start`, { method: "POST" });
+      rawStreamRef.current?.getTracks().forEach((track) => track.stop());
+      rawStreamRef.current = mediaStream;
+      stopPortraitPipeline();
+      const portraitStream = await createPortraitRecordingStream(mediaStream);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      setStream(portraitStream);
+      return portraitStream;
     } catch (cause) {
       const name = cause instanceof DOMException ? cause.name : "";
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
         setError(
-          "Please allow camera and microphone access in your browser settings, then tap Start again.",
+          "Please allow camera and microphone access in your browser settings, then tap Start recording again.",
         );
       } else if (name === "NotFoundError") {
         setError("No camera found on this device.");
@@ -209,17 +314,23 @@ export function InterviewRecorder({
           "Could not start camera. Use HTTPS on mobile or check browser permissions.",
         );
       }
-    } finally {
-      setIsStarting(false);
+      return null;
     }
   }
 
-  function startRecording() {
-    if (!stream || !currentQuestion) {
+  async function startRecording() {
+    if (!currentQuestion) {
       return;
     }
 
-    const liveTracks = stream.getTracks();
+    setIsPreparingCamera(true);
+    const currentStream = await ensureCameraStream();
+    setIsPreparingCamera(false);
+    if (!currentStream) {
+      return;
+    }
+
+    const liveTracks = currentStream.getTracks();
     if (liveTracks.length === 0 || liveTracks.some((t) => t.readyState === "ended")) {
       setError("Camera stream was disconnected. Please reload the page and try again.");
       return;
@@ -248,7 +359,7 @@ export function InterviewRecorder({
 
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorder = new MediaRecorder(currentStream, mimeType ? { mimeType } : undefined);
     } catch (err) {
       setError(
         err instanceof Error
@@ -497,42 +608,42 @@ export function InterviewRecorder({
         </div>
       </div>
 
-      <section className="grid gap-4 lg:grid-cols-[0.8fr_1fr]">
+      <section className="grid grid-cols-2 gap-4">
         <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900">
-          {currentQuestion.avatarVideoUrl ? (
-            <video
-              className="aspect-[9/16] w-full object-cover"
-              controls
-              playsInline
-              src={currentQuestion.avatarVideoUrl}
-            />
-          ) : (
-            <div className="flex aspect-[9/16] flex-col items-center justify-center bg-gradient-to-b from-cyan-400 to-blue-700 p-8 text-center text-slate-950">
-              <Video className="h-14 w-14" />
-              <p className="mt-4 text-sm font-semibold uppercase tracking-[0.25em]">
-                AI Avatar Prompt
-              </p>
-              <p className="mt-4 text-2xl font-bold">{currentQuestion.title}</p>
-            </div>
-          )}
+          <video
+            className="aspect-[9/16] w-full bg-black object-contain"
+            controls
+            playsInline
+            preload="auto"
+            src={getQuestionVideoSrc(currentQuestion)}
+          />
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          {/* <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-sm font-medium text-cyan-300">Question text</p>
             <p className="mt-3 text-xl leading-8">{currentQuestion.prompt}</p>
-          </div>
+          </div> */}
 
           {/* Single video element — swapped between live (srcObject) and
               recorded (src) imperatively, never unmounted.
               Flipped horizontally so left hand always appears on the left. */}
           <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black">
-            <video
-              autoPlay
-              className="aspect-[9/16] max-h-[58vh] w-full scale-x-[-1] object-cover"
-              playsInline
-              ref={videoRef}
-            />
+            {!stream && !previewUrl && !isProcessing && !isRecording ? (
+              <div className="flex aspect-[9/16] w-full items-center justify-center bg-black p-6 text-center text-slate-300">
+                <p className="max-w-[14rem] text-sm leading-6">
+                  Camera is off. Play/listen to the question video, then tap{" "}
+                  <span className="font-semibold text-cyan-300">Start recording</span>.
+                </p>
+              </div>
+            ) : (
+              <video
+                autoPlay
+                className="aspect-[9/16] w-full scale-x-[-1] bg-black object-cover"
+                playsInline
+                ref={videoRef}
+              />
+            )}
 
             {/* Recording timer — top-left */}
             {isRecording ? (
@@ -596,11 +707,12 @@ export function InterviewRecorder({
             {!isRecording && !isProcessing && !recordedBlob ? (
               <button
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 font-semibold text-slate-950 hover:bg-cyan-300"
-                onClick={startRecording}
+                disabled={isPreparingCamera}
+                onClick={() => void startRecording()}
                 type="button"
               >
                 <Play className="h-4 w-4" />
-                Start recording
+                {isPreparingCamera ? "Starting camera..." : "Start recording"}
               </button>
             ) : null}
 

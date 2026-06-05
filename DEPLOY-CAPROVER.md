@@ -24,12 +24,14 @@ This creates `deploy.tar` in the project root (excludes `node_modules`, `.next`,
 The app expects MySQL tables to exist. From your machine (with `.env` pointing at production DB), run once:
 
 ```bash
-npx tsx scripts/apply-asset-storage-url-migration.ts
-npx tsx scripts/apply-row-number-and-doctor-fields-migration.ts
-npx tsx scripts/apply-asset-kind-edited-storage-url.ts
+npm run db:migrate-live
 npx tsx scripts/make-spaces-objects-public.ts
 npm run prisma:seed
 ```
+
+`db:migrate-live` runs all schema updates in order (live doctor id conversion, storage_url, doctor fields, number column, asset_kind, column order). Scripts are idempotent — safe to re-run.
+
+**Note:** Production was created with varchar doctor ids (`doctor_code`). The first step converts to int ids + `doctor_id` code column to match the current app.
 
 Or use `npm run db:setup-local` on a fresh empty database.
 
@@ -48,5 +50,6 @@ Or use `npm run db:setup-local` on a fresh empty database.
 
 - **Build fails on CapRover**: increase app memory (512MB+ recommended for `next build`)
 - **DB connection error**: check firewall — allow CapRover server IP on DO database trusted sources
+- **`ENOTFOUND` on DB host**: DNS issue on machine/server. Add `MYSQL_HOST_IP=<resolved-ip>` and keep `MYSQL_HOST` as original domain.
 - **Login fails**: ensure `NEXTAUTH_URL` matches the browser URL exactly (https)
 - **Upload fails**: verify Spaces keys and `STORAGE_PUBLIC_BASE_URL` uses `.cdn.digitaloceanspaces.com`
