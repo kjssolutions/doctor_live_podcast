@@ -185,8 +185,8 @@ export function DoctorProductionCells({
             </p>
           ) : hasSpotifyUrl ? (
             <p className="text-xs text-slate-500">
-              Spotify URL saved — only Spotify is allowed until you remove the link
-              (Processing → Done → Spotify).
+              Spotify URL saved — flyer is generated automatically. Only Spotify
+              is allowed until you remove the link (Processing → Done → Spotify).
             </p>
           ) : null}
         </div>

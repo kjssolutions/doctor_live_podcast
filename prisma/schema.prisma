@@ -33,6 +33,7 @@ enum PostProductionStatus {
 enum AssetKind {
   INTERVIEW_RECORDING
   EDITED_VIDEO
+  FLYER
 }
 
 /// MR login — maps to existing tbl_employee
@@ -78,6 +79,7 @@ model Doctor {
   spotifyUrl          String?           @map("spotify_url") @db.Text
   recordings          AnswerRecording[]
   editedVideo         EditedVideo?
+  flyer               Flyer?
 
   @@index([createdByEmployeeId])
   @@index([doctorCode])
@@ -116,6 +118,7 @@ model Asset {
   createdAt       DateTime          @default(now()) @map("created_at")
   recordings      AnswerRecording[]
   editedVideos    EditedVideo[]
+  flyers          Flyer[]
 
   @@index([doctorId])
   @@index([doctorCode])
@@ -142,6 +145,24 @@ model EditedVideo {
   @@index([doctorId])
   @@index([createdByEmployeeId])
   @@map("edited_video_table")
+}
+
+model Flyer {
+  number     Int      @unique @default(autoincrement()) @map("number")
+  id         String   @id @default(cuid())
+  doctorId   Int      @unique @map("doctor_id")
+  doctor     Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorCode String   @map("doctor_code") @db.VarChar(50)
+  doctorName String?  @map("doctor_name") @db.VarChar(255)
+  assetId    String   @map("asset_id")
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  spotifyUrl String   @map("spotify_url") @db.Text
+  storageUrl String   @map("storage_url") @db.VarChar(1024)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([doctorId])
+  @@map("flyer_table")
 }
 
 model AnswerRecording {

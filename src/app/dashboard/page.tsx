@@ -35,6 +35,7 @@ export default async function DashboardPage() {
     },
     include: {
       recordings: true,
+      flyer: { select: { id: true } },
     },
     orderBy: { podcastCreatedAt: "desc" },
   });
@@ -74,6 +75,7 @@ export default async function DashboardPage() {
                 requestHeaders,
               );
               const allVideosRecorded = doctor.interviewStatus === "COMPLETED";
+              const flyerReady = Boolean(doctor.flyer);
               return (
                 <article
                   className="grid gap-4 px-6 py-5 lg:grid-cols-[1fr_auto_auto]"
@@ -102,7 +104,7 @@ export default async function DashboardPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     {allVideosRecorded ? (
-                      <DownloadFlyerButton />
+                      <DownloadFlyerButton doctorId={doctor.id} ready={flyerReady} />
                     ) : (
                       <CopyLinkButton url={url} />
                     )}

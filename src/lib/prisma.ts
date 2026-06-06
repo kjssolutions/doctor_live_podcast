@@ -8,7 +8,7 @@ import { getDatabaseUrl } from "@/lib/env";
 // Without caching the adapter, each reload creates a fresh PrismaMariaDb pool
 // (10 connections) that is never closed → MySQL hits max_connections (1040).
 /** Bump when Prisma schema changes so dev HMR does not keep an old client (e.g. asset.key). */
-const PRISMA_CLIENT_CACHE_KEY = "prisma-client-v3-asset-kind";
+const PRISMA_CLIENT_CACHE_KEY = "prisma-client-v4-flyer";
 
 const g = globalThis as unknown as {
   prismaAdapter?: PrismaMariaDb;

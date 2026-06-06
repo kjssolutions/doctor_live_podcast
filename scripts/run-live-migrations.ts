@@ -13,6 +13,7 @@ const MIGRATIONS = [
   "scripts/fix-storage-urls-and-rename-number.ts",
   "scripts/apply-asset-kind-edited-storage-url.ts",
   "scripts/reorder-answer-recording-columns.ts",
+  "scripts/apply-flyer-migration.ts",
 ] as const;
 
 function shouldRetry(error: unknown) {

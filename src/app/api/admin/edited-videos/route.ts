@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { deleteDoctorFlyer } from "@/lib/generate-doctor-flyer";
 import { deleteObject } from "@/lib/spaces";
 
 export const runtime = "nodejs";
@@ -40,6 +41,7 @@ export async function DELETE(request: Request) {
     }
 
     await deleteObject(edited.asset.storageUrl);
+    await deleteDoctorFlyer(doctorId);
 
     await prisma.$transaction([
       prisma.editedVideo.delete({ where: { id: edited.id } }),

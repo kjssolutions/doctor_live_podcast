@@ -157,7 +157,7 @@ async function createPodcastTables(conn: mariadb.Connection) {
       doctor_code VARCHAR(50) NOT NULL,
       doctor_name VARCHAR(255) NULL,
       employee_id VARCHAR(30) NULL,
-      asset_kind ENUM('INTERVIEW_RECORDING','EDITED_VIDEO') NOT NULL DEFAULT 'INTERVIEW_RECORDING',
+      asset_kind ENUM('INTERVIEW_RECORDING','EDITED_VIDEO','FLYER') NOT NULL DEFAULT 'INTERVIEW_RECORDING',
       storage_url VARCHAR(1024) NOT NULL,
       mime_type VARCHAR(128) NOT NULL,
       size_bytes INTEGER NOT NULL,
@@ -193,6 +193,28 @@ async function createPodcastTables(conn: mariadb.Connection) {
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
   console.log("  edited_video_table OK");
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS flyer_table (
+      \`number\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      id VARCHAR(191) NOT NULL,
+      doctor_id INT NOT NULL,
+      doctor_code VARCHAR(50) NOT NULL,
+      doctor_name VARCHAR(255) NULL,
+      asset_id VARCHAR(191) NOT NULL,
+      spotify_url TEXT NOT NULL,
+      storage_url VARCHAR(1024) NOT NULL,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      UNIQUE INDEX flyer_table_number_key(\`number\`),
+      UNIQUE INDEX flyer_table_doctor_id_key(doctor_id),
+      INDEX flyer_table_asset_id_idx(asset_id),
+      PRIMARY KEY (id),
+      CONSTRAINT flyer_doctor_fkey FOREIGN KEY (doctor_id) REFERENCES doctor_table(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT flyer_asset_fkey FOREIGN KEY (asset_id) REFERENCES asset_table(id) ON DELETE CASCADE ON UPDATE CASCADE
+    ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  console.log("  flyer_table OK");
 
   await conn.query(`
     CREATE TABLE IF NOT EXISTS answer_recording_table (

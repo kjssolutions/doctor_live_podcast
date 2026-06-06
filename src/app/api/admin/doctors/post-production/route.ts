@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { deleteDoctorFlyer, generateDoctorFlyer } from "@/lib/generate-doctor-flyer";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -129,5 +130,36 @@ export async function PATCH(request: Request) {
     select: { id: true, postProductionStatus: true, spotifyUrl: true },
   });
 
-  return NextResponse.json(updated);
+  let flyerReady = false;
+
+  try {
+    const shouldGenerateFlyer =
+      updated.postProductionStatus === "SPOTIFY" && Boolean(updated.spotifyUrl);
+
+    if (shouldGenerateFlyer) {
+      await generateDoctorFlyer(doctorId);
+      flyerReady = true;
+    } else if (
+      spotifyUrl !== undefined &&
+      !updated.spotifyUrl
+    ) {
+      await deleteDoctorFlyer(doctorId);
+    }
+  } catch (flyerError) {
+    console.error("[post-production/flyer]", flyerError);
+    const message =
+      flyerError instanceof Error
+        ? flyerError.message
+        : "Flyer generation failed";
+    return NextResponse.json(
+      {
+        error: `${message}. Spotify URL was saved, but the flyer could not be generated. Try saving again.`,
+        postProductionStatus: updated.postProductionStatus,
+        spotifyUrl: updated.spotifyUrl,
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ...updated, flyerReady });
 }
