@@ -13,6 +13,54 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+type EmployeeAuthRow = {
+  empEmployeeId: string;
+  empName: string | null;
+  empDesignation: string | null;
+  empUsername: string;
+  empPassword: string;
+};
+
+async function findEmployeeForAuth(username: string): Promise<EmployeeAuthRow | null> {
+  const normalized = username.trim();
+
+  const employee = await prisma.employee.findFirst({
+    where: {
+      OR: [{ empUsername: normalized }, { empEmployeeId: normalized }],
+    },
+    select: {
+      empEmployeeId: true,
+      empName: true,
+      empDesignation: true,
+      empUsername: true,
+      empPassword: true,
+    },
+  });
+
+  if (employee) {
+    return employee;
+  }
+
+  // Backward compatibility: some DBs still use legacy `employee_table`.
+  try {
+    const legacyRows = await prisma.$queryRaw<EmployeeAuthRow[]>`
+      SELECT
+        emp_employee_id AS empEmployeeId,
+        emp_name AS empName,
+        emp_designation AS empDesignation,
+        emp_username AS empUsername,
+        emp_password AS empPassword
+      FROM employee_table
+      WHERE emp_username = ${normalized} OR emp_employee_id = ${normalized}
+      LIMIT 1
+    `;
+
+    return legacyRows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
@@ -37,9 +85,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const employee = await prisma.employee.findFirst({
-          where: { empUsername: parsed.data.username.trim() },
-        });
+        const employee = await findEmployeeForAuth(parsed.data.username);
 
         if (!employee) {
           return null;

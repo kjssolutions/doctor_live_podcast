@@ -163,7 +163,12 @@ export function InterviewRecorder({
       const offsetY = (PORTRAIT_HEIGHT - drawHeight) / 2;
 
       ctx.clearRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+      // Mirror frames before encoding so stored video keeps selfie orientation.
+      ctx.save();
+      ctx.translate(PORTRAIT_WIDTH, 0);
+      ctx.scale(-1, 1);
       ctx.drawImage(sourceVideo, offsetX, offsetY, drawWidth, drawHeight);
+      ctx.restore();
       canvasAnimationRef.current = requestAnimationFrame(drawFrame);
     };
 
@@ -295,7 +300,6 @@ export function InterviewRecorder({
           width: { ideal: 1920 },
           height: { ideal: 1080 },
           aspectRatio: { ideal: 9 / 16 },
-          resizeMode: "crop-and-scale",
         },
         audio: true,
       });
@@ -656,9 +660,10 @@ export function InterviewRecorder({
             ) : (
               <video
                 autoPlay
-                className="aspect-[9/16] w-full scale-x-[-1] bg-black object-cover"
+                className="aspect-[9/16] w-full bg-black object-cover"
                 playsInline
                 ref={videoRef}
+                style={{ transform: "none" }}
               />
             )}
 

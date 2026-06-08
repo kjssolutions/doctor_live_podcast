@@ -17,6 +17,13 @@ export function getDatabaseUrl(): string {
   const { host, user, password, database, port, sslEnabled } = mysqlEnv();
 
   if (!host || !user || !password || !database) {
+    // During `next build` in CI/Docker, server modules can be evaluated while
+    // collecting page data before runtime env vars exist. Return a placeholder
+    // URL so the build can complete; runtime still requires real DB env vars.
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      return "mysql://root:root@127.0.0.1:3306/app";
+    }
+
     throw new Error(
       "Database is not configured. Set DATABASE_URL or MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DB.",
     );

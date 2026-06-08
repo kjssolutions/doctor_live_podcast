@@ -8,7 +8,14 @@ export async function proxy(request: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (token) {
+  const hasSessionCookie =
+    request.cookies.has("__Secure-next-auth.session-token") ||
+    request.cookies.has("next-auth.session-token");
+
+  // If a session cookie exists but token parsing fails (e.g. temporary
+  // secret mismatch between app instances), let the request continue and let
+  // server-side session checks make the final decision.
+  if (token || hasSessionCookie) {
     return NextResponse.next();
   }
 
