@@ -4,6 +4,8 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { ButtonLoadingContent } from "@/components/ui/button-loading";
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,11 +61,13 @@ export function LoginForm() {
       </div>
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
       <button
-        className="w-full rounded-xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={isPending}
         type="submit"
       >
-        {isPending ? "Signing in..." : "Sign in"}
+        <ButtonLoadingContent loading={isPending} loadingText="Signing in…">
+          Sign in
+        </ButtonLoadingContent>
       </button>
     </form>
   );

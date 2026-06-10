@@ -24,8 +24,8 @@ export default async function PublicInterviewPage({
 
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 text-center">
-        <h1 className="text-4xl font-bold">This link has expired</h1>
-        <p className="mt-4 text-slate-400">
+        <h1 className="text-3xl font-bold text-slate-900">This link has expired</h1>
+        <p className="mt-4 text-slate-500">
           Please ask your MR contact to create a new podcast interview link.
         </p>
       </main>
@@ -44,8 +44,8 @@ export default async function PublicInterviewPage({
   if (questions.length === 0) {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 text-center">
-        <h1 className="text-4xl font-bold">Interview not ready</h1>
-        <p className="mt-4 text-slate-400">
+        <h1 className="text-3xl font-bold text-slate-900">Interview not ready</h1>
+        <p className="mt-4 text-slate-500">
           No active questions are configured. Run npm run db:setup-local and npm
           run prisma:seed.
         </p>

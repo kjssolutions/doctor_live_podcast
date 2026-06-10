@@ -20,7 +20,10 @@ body {
 button,
 a,
 input,
-textarea {
+textarea,
+select,
+summary,
+[role="button"] {
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
@@ -28,10 +31,23 @@ textarea {
     opacity 150ms ease;
 }
 
+a,
+button,
+select,
+summary,
+[role="button"],
+label[for] {
+  cursor: pointer;
+}
+
 button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgba(34, 211, 238, 0.25);
-  cursor: pointer;
+}
+
+button:disabled,
+a[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 .interview-footer-safe {

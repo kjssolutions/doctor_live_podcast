@@ -3,9 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { ButtonLoadingContent } from "@/components/ui/button-loading";
 import { getVideoDurationFromFile } from "@/lib/video-duration";
 
-export function EditedVideoUpload({ doctorId }: { doctorId: number }) {
+export function EditedVideoUpload({
+  doctorId,
+  variant = "default",
+}: {
+  doctorId: number;
+  variant?: "default" | "light";
+}) {
+  const isLight = variant === "light";
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -64,19 +72,33 @@ export function EditedVideoUpload({ doctorId }: { doctorId: number }) {
     <div className="space-y-2">
       <input
         accept="video/*"
-        className="block w-full text-xs text-slate-300 file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 hover:file:bg-white/20"
+        className={
+          isLight
+            ? "block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-800"
+            : "block w-full text-xs text-slate-300 file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 hover:file:bg-white/20"
+        }
         ref={inputRef}
         type="file"
       />
       <button
-        className="w-full rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-300 disabled:opacity-60"
+        className={
+          isLight
+            ? "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            : "inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+        }
         disabled={isUploading}
         onClick={() => void upload()}
         type="button"
       >
-        {isUploading ? "Uploading…" : "Upload merged video"}
+        <ButtonLoadingContent loading={isUploading} loadingText="Uploading…">
+          Upload merged video
+        </ButtonLoadingContent>
       </button>
-      {error ? <p className="text-xs text-rose-300">{error}</p> : null}
+      {error ? (
+        <p className={`text-xs ${isLight ? "text-rose-600" : "text-rose-300"}`}>
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

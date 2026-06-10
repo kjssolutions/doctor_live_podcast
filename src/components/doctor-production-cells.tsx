@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { ButtonLoadingContent } from "@/components/ui/button-loading";
 import {
   getDisplayPostProductionStatus,
   type PostProductionStatus,
@@ -121,12 +122,14 @@ export function DoctorProductionCells({
               </button>
             ) : (
               <button
-                className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!canSaveSpotify}
                 onClick={() => void saveSpotifyUrl()}
                 type="button"
               >
-                Done
+                <ButtonLoadingContent loading={saving} loadingText="Saving…">
+                  Done
+                </ButtonLoadingContent>
               </button>
             )}
           </div>
