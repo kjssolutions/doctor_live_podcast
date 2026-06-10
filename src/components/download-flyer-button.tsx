@@ -59,7 +59,7 @@ export function DownloadFlyerButton({
         </ButtonLoadingContent>
       </button>
       {helperText ? (
-        <p className="max-w-[11rem] text-xs text-slate-500">{helperText}</p>
+        <p className="max-w-full text-xs text-slate-500 sm:max-w-[11rem]">{helperText}</p>
       ) : null}
     </div>
   );

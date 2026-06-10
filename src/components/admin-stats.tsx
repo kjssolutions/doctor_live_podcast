@@ -1,40 +1,40 @@
-import { CheckCircle2, Filter, Users, Video } from "lucide-react";
+import { Clapperboard, Music2, Video } from "lucide-react";
 
-export function DashboardStats({
+export function AdminStats({
   total,
-  processing,
-  published,
-  pending,
+  withRecordings,
+  withMerged,
+  spotifyDone,
 }: {
   total: number;
-  processing: number;
-  published: number;
-  pending: number;
+  withRecordings: number;
+  withMerged: number;
+  spotifyDone: number;
 }) {
   const cards = [
     {
-      label: "Total Doctors",
+      label: "Total doctors",
       value: total,
       hint: "All podcast links",
-      icon: Users,
-    },
-    {
-      label: "Processing",
-      value: processing,
-      hint: "In edit or recording",
       icon: Video,
     },
     {
-      label: "Published",
-      value: published,
-      hint: "Available on Spotify",
-      icon: CheckCircle2,
+      label: "With recordings",
+      value: withRecordings,
+      hint: "Submitted answers",
+      icon: Clapperboard,
     },
     {
-      label: "Pending Actions",
-      value: pending,
-      hint: "Requires review",
-      icon: Filter,
+      label: "Merged uploaded",
+      value: withMerged,
+      hint: "Final video ready",
+      icon: Clapperboard,
+    },
+    {
+      label: "Spotify done",
+      value: spotifyDone,
+      hint: "Published episodes",
+      icon: Music2,
     },
   ];
 

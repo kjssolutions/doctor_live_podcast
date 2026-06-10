@@ -1,12 +1,13 @@
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Clapperboard, Music2, Video } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import {
   AdminDoctorsPanel,
   type AdminDoctorRow,
 } from "@/components/admin-doctors-panel";
+import { AdminStats } from "@/components/admin-stats";
 import { authOptions } from "@/lib/auth";
 import { getDisplayPostProductionStatus } from "@/lib/post-production";
 import { prisma } from "@/lib/prisma";
@@ -104,44 +105,12 @@ export default async function AdminPage() {
         </div>
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Total doctors</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{rows.length}</p>
-            </div>
-            <Video className="h-5 w-5 text-slate-400" />
-          </div>
-        </article>
-        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-500">With recordings</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{withRecordings}</p>
-            </div>
-            <Clapperboard className="h-5 w-5 text-slate-400" />
-          </div>
-        </article>
-        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Merged uploaded</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{withMerged}</p>
-            </div>
-            <Clapperboard className="h-5 w-5 text-slate-400" />
-          </div>
-        </article>
-        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Spotify done</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{spotifyDone}</p>
-            </div>
-            <Music2 className="h-5 w-5 text-slate-400" />
-          </div>
-        </article>
-      </div>
+      <AdminStats
+        spotifyDone={spotifyDone}
+        total={rows.length}
+        withMerged={withMerged}
+        withRecordings={withRecordings}
+      />
 
       <AdminDoctorsPanel doctors={rows} />
     </div>

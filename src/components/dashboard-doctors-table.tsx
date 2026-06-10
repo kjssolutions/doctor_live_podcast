@@ -42,6 +42,64 @@ const statusBadgeStyles: Record<DashboardDoctorRow["displayStatus"], string> = {
   SPOTIFY: "bg-sky-50 text-sky-700 ring-sky-200",
 };
 
+function shortAssetLabel(label: string, maxLength = 22) {
+  if (label.length <= maxLength) {
+    return label;
+  }
+  const ext = label.includes(".") ? label.slice(label.lastIndexOf(".")) : "";
+  const base = ext ? label.slice(0, label.length - ext.length) : label;
+  const keep = Math.max(8, maxLength - ext.length - 1);
+  return `${base.slice(0, keep)}…${ext}`;
+}
+
+function FinalAssetsCell({
+  doctor,
+  compact = false,
+}: {
+  doctor: DashboardDoctorRow;
+  compact?: boolean;
+}) {
+  if (doctor.editedVideoLabel) {
+    return (
+      <div className={`min-w-0 space-y-1 ${compact ? "max-w-full" : "max-w-[9rem] sm:max-w-[11rem] lg:max-w-[14rem]"}`}>
+        <p
+          className="inline-flex min-w-0 items-center gap-1.5 text-sm text-slate-700"
+          title={doctor.editedVideoLabel}
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+          <span className="truncate">
+            {compact
+              ? shortAssetLabel(doctor.editedVideoLabel, 28)
+              : shortAssetLabel(doctor.editedVideoLabel)}
+          </span>
+        </p>
+        {doctor.spotifyUrl ? (
+          <a
+            className="inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700"
+            href={doctor.spotifyUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Spotify
+            <ExternalLink className="h-3 w-3 shrink-0" />
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (doctor.flyerReady) {
+    return (
+      <p className="inline-flex items-center gap-1.5 text-sm text-slate-700">
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+        Flyer ready
+      </p>
+    );
+  }
+
+  return <p className="text-sm text-slate-400 italic">Pending upload</p>;
+}
+
 function shortUrl(url: string) {
   try {
     const parsed = new URL(url);
@@ -52,6 +110,23 @@ function shortUrl(url: string) {
   } catch {
     return url.length > 28 ? `${url.slice(0, 25)}...` : url;
   }
+}
+
+function MobileDetailBlock({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <p className="mb-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
 }
 
 function CopyRecordingLink({ url }: { url: string }) {
@@ -76,7 +151,7 @@ function CopyRecordingLink({ url }: { url: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
       <span className="min-w-0 flex-1 truncate text-sm text-slate-600">
         {shortUrl(url)}
       </span>
@@ -291,9 +366,93 @@ export function DashboardDoctorsTable({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      {/* Mobile: separate card per doctor */}
+      <div className="space-y-4 md:hidden">
+        {pageItems.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-14 text-center text-sm text-slate-500 shadow-sm">
+            No doctors found. Try a different search or create a new doctor link.
+          </div>
+        ) : (
+          pageItems.map((doctor) => (
+            <article
+              className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              key={doctor.id}
+            >
+              <div className="flex gap-3 border-b border-slate-100 pb-3">
+                {doctor.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt={doctor.name}
+                    className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                    src={doctor.imageUrl}
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200">
+                    <User className="h-5 w-5" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-semibold text-slate-900">
+                    {doctor.name}
+                  </p>
+                  <p className="truncate text-sm text-slate-500">
+                    {doctor.specialty ?? "No specialty"}
+                  </p>
+                </div>
+              </div>
+
+              <MobileDetailBlock label="Area & code">
+                <p className="text-sm font-medium text-slate-800">
+                  {doctor.area ?? "—"}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                    {doctor.doctorCode}
+                  </span>
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${statusBadgeStyles[doctor.displayStatus]}`}
+                  >
+                    {formatPostProductionStatus(doctor.displayStatus)}
+                  </span>
+                </div>
+              </MobileDetailBlock>
+
+              <MobileDetailBlock label="Recording link">
+                <CopyRecordingLink url={doctor.recordingUrl} />
+              </MobileDetailBlock>
+
+              <MobileDetailBlock label="Final assets">
+                <FinalAssetsCell compact doctor={doctor} />
+              </MobileDetailBlock>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                  Actions
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <DownloadFlyerButton
+                    doctorId={doctor.id}
+                    interviewCompleted={doctor.interviewCompleted}
+                    ready={doctor.flyerReady}
+                    variant="dashboard"
+                  />
+                  <Link
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    href={`/dashboard/doctors/${doctor.id}`}
+                  >
+                    Review
+                  </Link>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+
+      {/* Desktop: table layout */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
         <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full text-sm">
+          <table className="min-w-[900px] w-full text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase">
               <tr>
                 <th className="px-5 py-4">Photo</th>
@@ -301,7 +460,7 @@ export function DashboardDoctorsTable({
                 <th className="px-5 py-4">Area &amp; Code</th>
                 <th className="px-5 py-4">Recording Link</th>
                 <th className="px-5 py-4">Status</th>
-                <th className="px-5 py-4">Final Assets</th>
+                <th className="w-[1%] whitespace-nowrap px-5 py-4">Final Assets</th>
                 <th className="px-5 py-4">Actions</th>
               </tr>
             </thead>
@@ -353,33 +512,8 @@ export function DashboardDoctorsTable({
                         {formatPostProductionStatus(doctor.displayStatus)}
                       </span>
                     </td>
-                    <td className="px-5 py-4">
-                      {doctor.editedVideoLabel ? (
-                        <div className="space-y-1">
-                          <p className="inline-flex items-center gap-1.5 text-sm text-slate-700">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                            {doctor.editedVideoLabel}
-                          </p>
-                          {doctor.spotifyUrl ? (
-                            <a
-                              className="inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700"
-                              href={doctor.spotifyUrl}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              Spotify Live
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ) : null}
-                        </div>
-                      ) : doctor.flyerReady ? (
-                        <p className="inline-flex items-center gap-1.5 text-sm text-slate-700">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          Flyer ready
-                        </p>
-                      ) : (
-                        <p className="text-sm text-slate-400 italic">Pending upload</p>
-                      )}
+                    <td className="w-[1%] max-w-[14rem] px-5 py-4">
+                      <FinalAssetsCell doctor={doctor} />
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center gap-2">
@@ -403,43 +537,43 @@ export function DashboardDoctorsTable({
             </tbody>
           </table>
         </div>
+      </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">
-            Showing {pageItems.length} of {filtered.length} doctors
-          </p>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <p className="text-sm text-slate-500">
+          Showing {pageItems.length} of {filtered.length} doctors
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={currentPage <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            type="button"
+          >
+            Previous
+          </button>
+          {pageNumbers.map((pageNumber) => (
             <button
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={currentPage <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className={`min-w-9 rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                pageNumber === currentPage
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+              }`}
+              key={pageNumber}
+              onClick={() => setPage(pageNumber)}
               type="button"
             >
-              Previous
+              {pageNumber}
             </button>
-            {pageNumbers.map((pageNumber) => (
-              <button
-                className={`min-w-9 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-                  pageNumber === currentPage
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-200 text-slate-700 hover:bg-slate-50"
-                }`}
-                key={pageNumber}
-                onClick={() => setPage(pageNumber)}
-                type="button"
-              >
-                {pageNumber}
-              </button>
-            ))}
-            <button
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              type="button"
-            >
-              Next
-            </button>
-          </div>
+          ))}
+          <button
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={currentPage >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            type="button"
+          >
+            Next
+          </button>
         </div>
       </div>
     </div>
