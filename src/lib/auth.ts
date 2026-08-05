@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { normalizeAppRole } from "@/lib/roles";
 
 // Local tunnels (loca.lt/ngrok) forward requests with their public host.
 // NextAuth v4 only trusts that host when this flag is set.
@@ -19,6 +20,7 @@ type EmployeeAuthRow = {
   empDesignation: string | null;
   empUsername: string;
   empPassword: string;
+  role: string | null;
 };
 
 async function findEmployeeForAuth(username: string): Promise<EmployeeAuthRow | null> {
@@ -34,6 +36,7 @@ async function findEmployeeForAuth(username: string): Promise<EmployeeAuthRow | 
       empDesignation: true,
       empUsername: true,
       empPassword: true,
+      role: true,
     },
   });
 
@@ -49,7 +52,8 @@ async function findEmployeeForAuth(username: string): Promise<EmployeeAuthRow | 
         emp_name AS empName,
         emp_designation AS empDesignation,
         emp_username AS empUsername,
-        emp_password AS empPassword
+        emp_password AS empPassword,
+        NULL AS role
       FROM employee_table
       WHERE emp_username = ${normalized} OR emp_employee_id = ${normalized}
       LIMIT 1
@@ -95,8 +99,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const role =
-          employee.empDesignation?.toUpperCase() === "ADMIN" ? "ADMIN" : "MR";
+        const role = normalizeAppRole(employee.role, employee.empDesignation);
 
         return {
           id: employee.empEmployeeId,
@@ -119,7 +122,7 @@ export const authOptions: NextAuthOptions = {
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as "MR" | "ADMIN";
+        session.user.role = token.role as typeof session.user.role;
       }
 
       return session;

@@ -2,16 +2,16 @@ import "dotenv/config";
 import * as mariadb from "mariadb";
 
 const EMPLOYEES = [
-  ["F001978", "ANUP KUMAR DEY", "MR", "F001978", "F001978", "TEZPUR", "NORTH EAST", "EAST", "UTPAL SARMA", "F017480"],
-  ["F001979", "RAHUL SHARMA", "MR", "F001979", "F001979", "GUWAHATI", "NORTH EAST", "EAST", "UTPAL SARMA", "F017480"],
-  ["F001980", "PRIYA DAS", "MR", "F001980", "F001980", "SILCHAR", "NORTH EAST", "EAST", "UTPAL SARMA", "F017480"],
-  ["F001981", "VIKASH PATEL", "MR", "F001981", "F001981", "PATNA", "EAST", "EAST", "AMIT SINGH", "F017481"],
-  ["F001982", "NEHA GUPTA", "MR", "F001982", "F001982", "RANCHI", "EAST", "EAST", "AMIT SINGH", "F017481"],
-  ["F001983", "SURESH REDDY", "MR", "F001983", "F001983", "HYDERABAD", "SOUTH", "SOUTH", "KAVITA RAO", "F017482"],
-  ["F001984", "LAKSHMI NAIR", "MR", "F001984", "F001984", "KOCHI", "SOUTH", "SOUTH", "KAVITA RAO", "F017482"],
-  ["F001985", "ARJUN MEHTA", "MR", "F001985", "F001985", "MUMBAI", "WEST", "WEST", "SANJAY KULKARNI", "F017483"],
-  ["F001986", "POOJA JOSHI", "MR", "F001986", "F001986", "PUNE", "WEST", "WEST", "SANJAY KULKARNI", "F017483"],
-  ["F001987", "MANOJ VERMA", "MR", "F001987", "F001987", "DELHI", "NORTH", "NORTH", "ROHIT MALHOTRA", "F017484"],
+  ["F001978", "ANUP KUMAR DEY", "MR", "F001978", "F001978", "TEZPUR", "NORTH EAST", "EAST", "F017480"],
+  ["F001979", "RAHUL SHARMA", "MR", "F001979", "F001979", "GUWAHATI", "NORTH EAST", "EAST", "F017480"],
+  ["F001980", "PRIYA DAS", "MR", "F001980", "F001980", "SILCHAR", "NORTH EAST", "EAST", "F017480"],
+  ["F001981", "VIKASH PATEL", "MR", "F001981", "F001981", "PATNA", "EAST", "EAST", "F017481"],
+  ["F001982", "NEHA GUPTA", "MR", "F001982", "F001982", "RANCHI", "EAST", "EAST", "F017481"],
+  ["F001983", "SURESH REDDY", "MR", "F001983", "F001983", "HYDERABAD", "SOUTH", "SOUTH", "F017482"],
+  ["F001984", "LAKSHMI NAIR", "MR", "F001984", "F001984", "KOCHI", "SOUTH", "SOUTH", "F017482"],
+  ["F001985", "ARJUN MEHTA", "MR", "F001985", "F001985", "MUMBAI", "WEST", "WEST", "F017483"],
+  ["F001986", "POOJA JOSHI", "MR", "F001986", "F001986", "PUNE", "WEST", "WEST", "F017483"],
+  ["F001987", "MANOJ VERMA", "MR", "F001987", "F001987", "DELHI", "NORTH", "NORTH", "F017484"],
 ];
 
 function dbConfig() {
@@ -67,8 +67,8 @@ async function main() {
     const table = forcedTable || (await detectEmployeeTable(conn));
     const sql = `INSERT INTO ${table} (
       emp_employee_id, emp_name, emp_designation, emp_username, emp_password,
-      emp_headquarters, region, zone, l1_manager, l1_manager_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      emp_headquarters, region, zone, l1_manager_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       emp_name = VALUES(emp_name),
       emp_designation = VALUES(emp_designation),
@@ -77,7 +77,6 @@ async function main() {
       emp_headquarters = VALUES(emp_headquarters),
       region = VALUES(region),
       zone = VALUES(zone),
-      l1_manager = VALUES(l1_manager),
       l1_manager_id = VALUES(l1_manager_id)`;
 
     for (const employee of EMPLOYEES) {

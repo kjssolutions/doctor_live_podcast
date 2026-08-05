@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { doctorByIdWhere, approvedForAdminWhere } from "@/lib/doctor-access";
 import { deleteDoctorFlyer, generateDoctorFlyer } from "@/lib/generate-doctor-flyer";
 import { prisma } from "@/lib/prisma";
 
@@ -40,10 +41,9 @@ export async function PATCH(request: Request) {
         : undefined;
 
   const doctor = await prisma.doctor.findFirst({
-    where:
-      session.user.role === "ADMIN"
-        ? { id: doctorId }
-        : { id: doctorId, createdByEmployeeId: session.user.id },
+    where: {
+      AND: [doctorByIdWhere(session.user, doctorId), approvedForAdminWhere()],
+    },
     select: {
       id: true,
       editedVideo: { select: { id: true } },
@@ -62,13 +62,13 @@ export async function PATCH(request: Request) {
   if (!doctor.editedVideo) {
     if (status === "DONE" || status === "SPOTIFY") {
       return NextResponse.json(
-        { error: "Upload merged video first, then set Done/Spotify." },
+        { error: "Add merged video URL first, then set Done/Spotify." },
         { status: 400 },
       );
     }
     if (spotifyUrl !== undefined && spotifyUrl) {
       return NextResponse.json(
-        { error: "Upload merged video first, then add Spotify link." },
+        { error: "Add merged video URL first, then add Spotify link." },
         { status: 400 },
       );
     }

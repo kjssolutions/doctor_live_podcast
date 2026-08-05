@@ -93,13 +93,12 @@ export function EditedVideoDeleteButton({
         variant={variant}
       >
         <p>
-          This will permanently remove the merged video for{" "}
-          <span className="font-semibold">{doctorLabel}</span> from the database
-          and DigitalOcean storage.
+          This will permanently remove the merged video URL for{" "}
+          <span className="font-semibold">{doctorLabel}</span> from the database.
         </p>
         <p className={isLight ? "text-slate-500" : "text-slate-400"}>
-          Spotify URL and post-production status will be reset. You can upload a new
-          merged video afterward.
+          Spotify URL and post-production status will be reset. You can save a new
+          merged video URL afterward.
         </p>
       </ConfirmDialog>
     </>

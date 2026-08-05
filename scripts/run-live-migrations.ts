@@ -14,6 +14,8 @@ const MIGRATIONS = [
   "scripts/apply-asset-kind-edited-storage-url.ts",
   "scripts/reorder-answer-recording-columns.ts",
   "scripts/apply-flyer-migration.ts",
+  "scripts/apply-thumb-url-migration.ts",
+  "scripts/drop-thumbnail-table.ts",
 ] as const;
 
 function shouldRetry(error: unknown) {

@@ -5,7 +5,13 @@ import { useState } from "react";
 
 import { ButtonLoadingContent } from "@/components/ui/button-loading";
 
-export function CopyLinkButton({ url }: { url: string }) {
+export function CopyLinkButton({
+  url,
+  variant = "default",
+}: {
+  url: string;
+  variant?: "default" | "light";
+}) {
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,10 +47,16 @@ export function CopyLinkButton({ url }: { url: string }) {
     }
   }
 
+  const isLight = variant === "light";
+
   return (
     <div className="flex flex-col items-start gap-1">
       <button
-        className="inline-flex w-[11rem] items-center justify-center gap-2 rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+        className={
+          isLight
+            ? "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            : "inline-flex w-[11rem] items-center justify-center gap-2 rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+        }
         disabled={copying}
         onClick={() => void copyLink()}
         type="button"
@@ -56,7 +68,11 @@ export function CopyLinkButton({ url }: { url: string }) {
           </>
         </ButtonLoadingContent>
       </button>
-      {error ? <p className="text-xs text-rose-300">{error}</p> : null}
+      {error ? (
+        <p className={`text-xs ${isLight ? "text-rose-600" : "text-rose-300"}`}>
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

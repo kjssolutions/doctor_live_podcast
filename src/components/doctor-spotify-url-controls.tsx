@@ -20,7 +20,7 @@ export function DoctorSpotifyUrlControls({
   const [error, setError] = useState<string | null>(null);
 
   const placeholder = useMemo(() => {
-    if (!hasMergedVideo) return "Upload merged video first.";
+    if (!hasMergedVideo) return "Add merged video URL first.";
     return "Paste Spotify episode link here…";
   }, [hasMergedVideo]);
 
@@ -88,17 +88,6 @@ export function DoctorSpotifyUrlControls({
           </button>
         )}
       </div>
-
-      {value && saved ? (
-        <a
-          className="text-xs font-semibold text-cyan-300 hover:text-cyan-200"
-          href={value}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Open Spotify
-        </a>
-      ) : null}
 
       {error ? <p className="text-xs text-rose-300">{error}</p> : null}
       {saving ? <p className="text-xs text-slate-500">Saving…</p> : null}

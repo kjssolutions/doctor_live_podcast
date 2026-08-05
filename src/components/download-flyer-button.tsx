@@ -54,7 +54,7 @@ export function DownloadFlyerButton({
         <ButtonLoadingContent loading={downloading} loadingText="Downloading…">
           <>
             <Download className="h-4 w-4" />
-            Download flyer
+            Download flyer PDF
           </>
         </ButtonLoadingContent>
       </button>

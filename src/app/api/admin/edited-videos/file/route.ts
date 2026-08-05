@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { approvedForAdminWhere, doctorListWhere } from "@/lib/doctor-access";
 import { prisma } from "@/lib/prisma";
 import { getSpacesClient, getSpacesConfig, parseStorageKey } from "@/lib/spaces";
 
@@ -32,10 +33,9 @@ export async function GET(request: Request) {
   const edited = await prisma.editedVideo.findFirst({
     where: {
       doctorId,
-      doctor:
-        session.user.role === "ADMIN"
-          ? {}
-          : { createdByEmployeeId: session.user.id },
+      doctor: {
+        AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+      },
     },
     include: {
       doctor: true,

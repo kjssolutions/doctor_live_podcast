@@ -1,5 +1,5 @@
 import { doctorAssetSnapshot } from "@/lib/doctor-asset-fields";
-import { renderDoctorFlyer } from "@/lib/flyer-template";
+import { renderDoctorFlyerPdf } from "@/lib/flyer-template";
 import { prisma } from "@/lib/prisma";
 import { buildFlyerKey } from "@/lib/storage-keys";
 import { deleteObject, uploadObject } from "@/lib/spaces";
@@ -40,7 +40,7 @@ export async function generateDoctorFlyer(doctorId: number) {
     throw new Error("Spotify URL is required to generate a flyer");
   }
 
-  const jpegBuffer = await renderDoctorFlyer({
+  const pdfBuffer = await renderDoctorFlyerPdf({
     doctorName: doctor.doctorName ?? doctor.doctorCode,
     spotifyUrl: doctor.spotifyUrl,
     doctorImageUrl: doctor.imageUrl,
@@ -49,8 +49,8 @@ export async function generateDoctorFlyer(doctorId: number) {
   const key = buildFlyerKey(doctor.id, doctor.doctorName, doctor.doctorCode);
   const storageUrl = await uploadObject({
     key,
-    body: jpegBuffer,
-    mimeType: "image/jpeg",
+    body: pdfBuffer,
+    mimeType: "application/pdf",
   });
 
   const snapshot = doctorAssetSnapshot(doctor);
@@ -58,8 +58,8 @@ export async function generateDoctorFlyer(doctorId: number) {
     ...snapshot,
     assetKind: "FLYER" as const,
     storageUrl,
-    mimeType: "image/jpeg",
-    sizeBytes: jpegBuffer.length,
+    mimeType: "application/pdf",
+    sizeBytes: pdfBuffer.length,
     durationSeconds: null,
   };
 

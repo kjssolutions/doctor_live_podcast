@@ -1,7 +1,5 @@
 import { getServerSession } from "next-auth";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import {
   AdminDoctorsPanel,
@@ -9,6 +7,7 @@ import {
 } from "@/components/admin-doctors-panel";
 import { AdminStats } from "@/components/admin-stats";
 import { authOptions } from "@/lib/auth";
+import { doctorListWhere, approvedForAdminWhere } from "@/lib/doctor-access";
 import { getDisplayPostProductionStatus } from "@/lib/post-production";
 import { prisma } from "@/lib/prisma";
 
@@ -37,10 +36,10 @@ export default async function AdminPage() {
   if (!session?.user) redirect("/login");
 
   const doctors = await prisma.doctor.findMany({
-    where:
-      session.user.role === "ADMIN"
-        ? { interviewToken: { not: null } }
-        : { interviewToken: { not: null }, createdByEmployeeId: session.user.id },
+    where: {
+      interviewToken: { not: null },
+      AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+    },
     include: {
       createdBy: true,
       recordings: {
@@ -62,17 +61,20 @@ export default async function AdminPage() {
       interviewStatus: doctor.interviewStatus ?? "SENT",
       mrName: doctor.createdBy?.empName ?? doctor.createdByEmployeeId ?? "—",
       mrId: doctor.createdByEmployeeId,
+      imageUrl: doctor.imageUrl,
+      thumbUrl: doctor.thumbUrl,
       hasMergedVideo: Boolean(doctor.editedVideo),
       postProductionStatus: doctor.postProductionStatus,
       spotifyUrl: doctor.spotifyUrl,
       recordings: latestRecordings.slice(0, 4).map((recording) => ({
         id: recording.id,
         title: `Q${recording.question.order}. ${recording.question.title}`,
+        order: recording.question.order,
         fileUrl: `/api/recordings/file?recordingId=${recording.id}`,
         downloadUrl: `/api/recordings/file?recordingId=${recording.id}&download=1`,
       })),
-      editedFileUrl: `/api/admin/edited-videos/file?doctorId=${doctor.id}`,
-      editedDownloadUrl: `/api/admin/edited-videos/file?doctorId=${doctor.id}&download=1`,
+      editedFileUrl: doctor.editedVideo?.storageUrl ?? "",
+      editedDownloadUrl: doctor.editedVideo?.storageUrl ?? "",
     };
   });
 
@@ -85,25 +87,20 @@ export default async function AdminPage() {
   ).length;
 
   return (
-    <div className="space-y-8">
-      <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <Link
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800"
-            href="/dashboard"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to dashboard
-          </Link>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900">
-            Post-production
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            Review answer clips, upload merged videos, and manage Spotify
-            publishing status.
-          </p>
+    <div className="space-y-7">
+      <header className="border-b border-slate-200 pb-5">
+        <div className="flex items-end gap-3">
+          <span className="mb-1.5 h-8 w-1 rounded-full bg-slate-900" aria-hidden />
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
+              Workspace
+            </p>
+            <h1 className="mt-0.5 text-3xl font-bold tracking-[-0.03em] text-slate-900 sm:text-[2.35rem]">
+              Admin
+            </h1>
+          </div>
         </div>
-      </section>
+      </header>
 
       <AdminStats
         spotifyDone={spotifyDone}

@@ -56,10 +56,10 @@ export function DoctorPostProductionControls({
         >
           <option value="PROCESSING">Processing</option>
           <option disabled={!hasMergedVideo} value="DONE">
-            Done{!hasMergedVideo ? " (upload merged video first)" : ""}
+            Done{!hasMergedVideo ? " (add merged video URL first)" : ""}
           </option>
           <option disabled={!hasMergedVideo} value="SPOTIFY">
-            Spotify{!hasMergedVideo ? " (upload merged video first)" : ""}
+            Spotify{!hasMergedVideo ? " (add merged video URL first)" : ""}
           </option>
         </select>
       </div>
@@ -68,7 +68,7 @@ export function DoctorPostProductionControls({
       {saving ? <p className="text-xs text-slate-500">Saving…</p> : null}
       {!hasMergedVideo ? (
         <p className="text-xs text-slate-500">
-          Upload merged video first. After that you can set Done/Spotify.
+          Add merged video URL first. After that you can set Done/Spotify.
         </p>
       ) : null}
     </div>

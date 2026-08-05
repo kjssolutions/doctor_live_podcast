@@ -10,9 +10,11 @@ import {
 } from "@/lib/post-production";
 
 const statusBadgeStyles: Record<PostProductionStatus, string> = {
+  CREATED: "bg-slate-100 text-slate-700 ring-slate-200",
   PROCESSING: "bg-amber-50 text-amber-700 ring-amber-200",
   DONE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   SPOTIFY: "bg-sky-50 text-sky-700 ring-sky-200",
+  REJECTED: "bg-rose-50 text-rose-700 ring-rose-200",
 };
 
 export function DoctorProductionControls({
@@ -40,7 +42,7 @@ export function DoctorProductionControls({
   const hasSpotifyUrl = Boolean(spotifyUrl.trim());
 
   const spotifyPlaceholder = useMemo(() => {
-    if (!hasMergedVideo) return "Upload merged video first.";
+    if (!hasMergedVideo) return "Add merged video URL first.";
     return "Paste Spotify episode link…";
   }, [hasMergedVideo]);
 
@@ -138,16 +140,6 @@ export function DoctorProductionControls({
           </button>
         )}
       </div>
-      {spotifyUrl && saved ? (
-        <a
-          className="text-xs font-medium text-sky-600 hover:text-sky-700"
-          href={spotifyUrl}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Open Spotify
-        </a>
-      ) : null}
     </div>
   );
 
@@ -174,7 +166,7 @@ export function DoctorProductionControls({
           <option disabled={!hasMergedVideo || hasSpotifyUrl} value="DONE">
             Done
             {!hasMergedVideo
-              ? " (upload merged video first)"
+              ? " (add merged video URL first)"
               : hasSpotifyUrl
                 ? " (remove Spotify URL first)"
                 : ""}
@@ -182,7 +174,7 @@ export function DoctorProductionControls({
           <option disabled={!hasMergedVideo || !hasSpotifyUrl} value="SPOTIFY">
             Spotify
             {!hasMergedVideo
-              ? " (upload merged video first)"
+              ? " (add merged video URL first)"
               : !hasSpotifyUrl
                 ? " (add Spotify URL first)"
                 : ""}
@@ -191,23 +183,14 @@ export function DoctorProductionControls({
       </div>
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
       {saving ? <p className="text-xs text-slate-500">Saving…</p> : null}
-      {!hasMergedVideo ? (
-        <p className="text-xs text-slate-500">
-          Upload merged video first. Then set Done, add Spotify URL, and set Spotify.
-        </p>
-      ) : hasSpotifyUrl ? (
-        <p className="text-xs text-slate-500">
-          Spotify URL saved — flyer is generated automatically.
-        </p>
-      ) : null}
     </div>
   );
 
   if (layout === "table") {
     return (
       <>
-        <td className="min-w-[320px] px-4 py-4 align-top">{spotifyField}</td>
-        <td className="min-w-[280px] px-4 py-4 align-top">{statusField}</td>
+        <td className="min-w-[260px] px-3 py-3.5 align-top">{spotifyField}</td>
+        <td className="min-w-[220px] px-3 py-3.5 align-top">{statusField}</td>
       </>
     );
   }

@@ -1,28 +1,39 @@
 import path from "node:path";
 
+import {
+  PDFArray,
+  PDFDocument,
+  PDFName,
+  PDFNumber,
+  PDFString,
+} from "pdf-lib";
 import QRCode from "qrcode";
 import sharp from "sharp";
 
-/** Template pixel size (1893×2483 @ 300dpi) */
-export const FLYER_WIDTH = 1893;
-export const FLYER_HEIGHT = 2483;
+/** Exact template pixel size — do not resize the canvas. */
+export const FLYER_WIDTH = 723;
+export const FLYER_HEIGHT = 1024;
 
-/** Layout tuned for public/flyer/Podcast flyer.jpg.jpeg */
+/**
+ * Layout for public/flyer/flyer.png
+ * Photo fills the center circle; name sits under the ring;
+ * QR covers the existing QR slot; play link targets the pause button.
+ */
 const LAYOUT = {
-  photoCenterX: Math.round(FLYER_WIDTH * 0.5),
-  photoCenterY: Math.round(FLYER_HEIGHT * 0.275),
-  photoDiameter: Math.round(FLYER_WIDTH * 0.255),
-  nameY: Math.round(FLYER_HEIGHT * 0.395),
-  nameFontSize: 56,
-  qrLeft: Math.round(FLYER_WIDTH * 0.735),
-  qrTop: Math.round(FLYER_HEIGHT * 0.835),
-  qrSize: Math.round(FLYER_WIDTH * 0.155),
+  photoCenterX: 361,
+  photoCenterY: 405,
+  photoDiameter: 310,
+  nameY: 600,
+  nameFontSize: 26,
+  qrLeft: 515,
+  qrTop: 800,
+  qrSize: 105,
+  playCenterX: 310,
+  playCenterY: 645,
+  playRadius: 30,
 } as const;
 
-const TEMPLATE_PATH = path.join(
-  process.cwd(),
-  "public/flyer/Podcast flyer.jpg.jpeg",
-);
+const TEMPLATE_PATH = path.join(process.cwd(), "public/flyer/flyer.png");
 
 function escapeXml(value: string) {
   return value
@@ -83,31 +94,25 @@ function buildNameOverlay(doctorName: string) {
 }
 
 async function buildQrOverlay(spotifyUrl: string) {
-  const qrBuffer = await QRCode.toBuffer(spotifyUrl, {
+  return QRCode.toBuffer(spotifyUrl, {
     type: "png",
     width: LAYOUT.qrSize,
     margin: 1,
     errorCorrectionLevel: "M",
     color: {
-      dark: "#000000",
-      light: "#ffffff",
+      dark: "#5B2C8A",
+      light: "#FFFFFF",
     },
   });
-
-  const padded = await sharp(qrBuffer)
-    .flatten({ background: "#ffffff" })
-    .png()
-    .toBuffer();
-
-  return padded;
 }
 
-export async function renderDoctorFlyer(input: {
+/** Composite doctor photo, name, and Spotify QR onto the flyer template (exact size). */
+export async function renderDoctorFlyerImage(input: {
   doctorName: string;
   spotifyUrl: string;
   doctorImageUrl?: string | null;
 }) {
-  const template = sharp(TEMPLATE_PATH);
+  const template = sharp(TEMPLATE_PATH).ensureAlpha();
   const composites: sharp.OverlayOptions[] = [];
 
   const photoBuffer = await loadDoctorPhoto(input.doctorImageUrl);
@@ -132,8 +137,71 @@ export async function renderDoctorFlyer(input: {
     top: LAYOUT.qrTop,
   });
 
-  return template
-    .composite(composites)
-    .jpeg({ quality: 92, mozjpeg: true })
-    .toBuffer();
+  return template.composite(composites).png().toBuffer();
+}
+
+/**
+ * Build a same-size PDF of the flyer with a clickable play-button link
+ * that opens the Spotify URL.
+ */
+export async function renderDoctorFlyerPdf(input: {
+  doctorName: string;
+  spotifyUrl: string;
+  doctorImageUrl?: string | null;
+}) {
+  const pngBuffer = await renderDoctorFlyerImage(input);
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([FLYER_WIDTH, FLYER_HEIGHT]);
+  const embedded = await pdfDoc.embedPng(pngBuffer);
+
+  page.drawImage(embedded, {
+    x: 0,
+    y: 0,
+    width: FLYER_WIDTH,
+    height: FLYER_HEIGHT,
+  });
+
+  // PDF coordinates: origin bottom-left
+  const linkSize = LAYOUT.playRadius * 2;
+  const linkX = LAYOUT.playCenterX - LAYOUT.playRadius;
+  const linkY = FLYER_HEIGHT - (LAYOUT.playCenterY + LAYOUT.playRadius);
+
+  const linkAnnot = pdfDoc.context.obj({
+    Type: PDFName.of("Annot"),
+    Subtype: PDFName.of("Link"),
+    Rect: pdfDoc.context.obj([
+      PDFNumber.of(linkX),
+      PDFNumber.of(linkY),
+      PDFNumber.of(linkX + linkSize),
+      PDFNumber.of(linkY + linkSize),
+    ]),
+    Border: pdfDoc.context.obj([
+      PDFNumber.of(0),
+      PDFNumber.of(0),
+      PDFNumber.of(0),
+    ]),
+    A: pdfDoc.context.obj({
+      Type: PDFName.of("Action"),
+      S: PDFName.of("URI"),
+      URI: PDFString.of(input.spotifyUrl),
+    }),
+  });
+
+  const annotsKey = PDFName.of("Annots");
+  let annots = page.node.lookup(annotsKey);
+  if (!(annots instanceof PDFArray)) {
+    annots = pdfDoc.context.obj([]);
+    page.node.set(annotsKey, annots);
+  }
+  (annots as PDFArray).push(pdfDoc.context.register(linkAnnot));
+
+  return Buffer.from(await pdfDoc.save());
+}
+
+export async function renderDoctorFlyer(input: {
+  doctorName: string;
+  spotifyUrl: string;
+  doctorImageUrl?: string | null;
+}) {
+  return renderDoctorFlyerPdf(input);
 }

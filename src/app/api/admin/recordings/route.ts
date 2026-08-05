@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { approvedForAdminWhere, doctorListWhere } from "@/lib/doctor-access";
 import { getActiveQuestions } from "@/lib/interviews";
 import { prisma } from "@/lib/prisma";
 import { deleteObject } from "@/lib/spaces";
@@ -28,10 +29,9 @@ export async function DELETE(request: Request) {
     const recording = await prisma.answerRecording.findFirst({
       where: {
         id: recordingId,
-        doctor:
-          session.user.role === "ADMIN"
-            ? {}
-            : { createdByEmployeeId: session.user.id },
+        doctor: {
+          AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+        },
       },
       include: {
         asset: true,

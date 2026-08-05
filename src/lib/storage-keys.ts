@@ -8,6 +8,7 @@ export const STORAGE_FOLDERS = {
   recording: "recording",
   editVideo: "Edit video",
   flyer: "flyer",
+  thumbnail: "thumbnail",
 } as const;
 
 export function sanitizeStorageSegment(value: string) {
@@ -84,14 +85,24 @@ export function buildEditedVideoKey(
   return `${STORAGE_ROOT}/${STORAGE_FOLDERS.editVideo}/${label}_edited_${Date.now()}.${extension}`;
 }
 
-/** doctor_live_podcast/flyer/{id}_{name}_{code}_flyer_{timestamp}.jpg */
+/** doctor_live_podcast/flyer/{id}_{name}_{code}_flyer_{timestamp}.pdf */
 export function buildFlyerKey(
   doctorId: number,
   doctorName: string | null | undefined,
   doctorCode: string,
 ) {
   const label = doctorFileLabel(doctorId, doctorName, doctorCode);
-  return `${STORAGE_ROOT}/${STORAGE_FOLDERS.flyer}/${label}_flyer_${Date.now()}.jpg`;
+  return `${STORAGE_ROOT}/${STORAGE_FOLDERS.flyer}/${label}_flyer_${Date.now()}.pdf`;
+}
+
+/** doctor_live_podcast/thumbnail/{id}_{name}_{code}_thumb_{timestamp}.jpg */
+export function buildThumbnailKey(
+  doctorId: number,
+  doctorName: string | null | undefined,
+  doctorCode: string,
+) {
+  const label = doctorFileLabel(doctorId, doctorName, doctorCode);
+  return `${STORAGE_ROOT}/${STORAGE_FOLDERS.thumbnail}/${label}_thumb_${Date.now()}.jpg`;
 }
 
 import { parseStorageKey } from "@/lib/spaces";

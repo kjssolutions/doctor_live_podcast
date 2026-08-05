@@ -21,6 +21,8 @@ async function ensureDoctorPodcastColumns(conn: mariadb.Connection) {
   const adds: Array<[string, string]> = [
     ["post_production_status", "`post_production_status` ENUM('PROCESSING','DONE','SPOTIFY') NOT NULL DEFAULT 'PROCESSING'"],
     ["spotify_url", "`spotify_url` TEXT NULL"],
+    ["image_url", "`image_url` TEXT NULL"],
+    ["thumb_url", "`thumb_url` TEXT NULL"],
     ["podcast_created_at", "`podcast_created_at` DATETIME(3) NULL DEFAULT CURRENT_TIMESTAMP(3)"],
     ["podcast_updated_at", "`podcast_updated_at` DATETIME(3) NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)"],
     ["emp_headquarters", "`emp_headquarters` VARCHAR(255) NULL"],
@@ -59,10 +61,17 @@ async function ensureEditedVideoTable(conn: mariadb.Connection) {
       ? "employee_table"
       : null;
 
+  // Match doctor_table.id signedness (local is INT; some live DBs use INT UNSIGNED).
+  const doctorIdType = await getColumnDataType(conn, "doctor_table", "id");
+  const doctorIdSql =
+    doctorIdType === "int" || doctorIdType === "integer"
+      ? "INT NOT NULL"
+      : "INT UNSIGNED NOT NULL";
+
   await conn.query(`
     CREATE TABLE edited_video_table (
       id VARCHAR(191) NOT NULL,
-      doctor_id INT UNSIGNED NOT NULL,
+      doctor_id ${doctorIdSql},
       asset_id VARCHAR(191) NOT NULL,
       created_by_employee_id VARCHAR(30) NULL,
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

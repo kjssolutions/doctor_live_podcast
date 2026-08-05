@@ -1,59 +1,77 @@
-import { CheckCircle2, Filter, Users, Video } from "lucide-react";
+import { CheckCircle2, Clock3, FilePlus2, Music2, Users, XCircle } from "lucide-react";
 
 export function DashboardStats({
   total,
+  created,
   processing,
   published,
+  rejected,
   pending,
 }: {
   total: number;
+  created: number;
   processing: number;
   published: number;
+  rejected: number;
   pending: number;
 }) {
   const cards = [
     {
-      label: "Total Doctors",
+      label: "Total doctors",
       value: total,
-      hint: "All podcast links",
+      hint: "In your scope",
       icon: Users,
+    },
+    {
+      label: "Created",
+      value: created,
+      hint: "Awaiting manager approval",
+      icon: FilePlus2,
     },
     {
       label: "Processing",
       value: processing,
-      hint: "In edit or recording",
-      icon: Video,
+      hint: "Approved / in edit",
+      icon: Clock3,
     },
     {
       label: "Published",
       value: published,
-      hint: "Available on Spotify",
-      icon: CheckCircle2,
+      hint: "Live on Spotify",
+      icon: Music2,
     },
     {
-      label: "Pending Actions",
+      label: "Rejected",
+      value: rejected,
+      hint: "Needs Sales cleanup",
+      icon: XCircle,
+    },
+    {
+      label: "Pending interview",
       value: pending,
-      hint: "Requires review",
-      icon: Filter,
+      hint: "Awaiting completion",
+      icon: CheckCircle2,
     },
   ];
 
   return (
-    <div className="flex flex-wrap gap-3 sm:gap-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6 lg:gap-4">
       {cards.map((card) => (
         <article
-          className="min-w-[calc(50%-0.375rem)] flex-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:min-w-[calc(50%-0.5rem)] sm:p-5 lg:min-w-[calc(25%-0.75rem)]"
+          className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5"
           key={card.label}
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-500 sm:text-sm">{card.label}</p>
-              <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
+              <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase sm:text-xs">
+                {card.label}
+              </p>
+              <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                 {card.value}
               </p>
-              <p className="mt-0.5 text-[10px] text-slate-400 sm:mt-1 sm:text-xs">{card.hint}</p>
+              <p className="mt-1 text-[11px] text-slate-400 sm:text-xs">{card.hint}</p>
             </div>
-            <div className="shrink-0 rounded-lg bg-slate-100 p-1.5 text-slate-500 sm:p-2">
+            <div className="shrink-0 rounded-lg bg-slate-100 p-2 text-slate-500">
               <card.icon className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
           </div>

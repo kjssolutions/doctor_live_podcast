@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+certificates
+# MediaPipe WASM (copied by scripts/copy-mediapipe-wasm.mjs on postinstall)
+/public/mediapipe/

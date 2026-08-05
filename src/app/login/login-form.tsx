@@ -32,41 +32,61 @@ export function LoginForm() {
     });
   }
 
+  const fieldClass =
+    "mt-2 w-full rounded-lg border border-[#ddd6cb] bg-[#faf8f5] px-4 py-3.5 text-[15px] text-[#1c1917] outline-none transition placeholder:text-[#a8a29e] focus:border-[#1a3a32] focus:bg-white focus:ring-2 focus:ring-[#1a3a32]/15";
+
   return (
     <form action={onSubmit} className="space-y-5">
       <div>
-        <label className="text-sm font-medium text-slate-200" htmlFor="username">
+        <label
+          className="block text-[12px] font-semibold tracking-wide text-[#57534e] uppercase"
+          htmlFor="username"
+        >
           Employee ID
         </label>
         <input
-          className="mt-2 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white outline-none ring-cyan-400/30 placeholder:text-slate-500 focus:ring-4"
+          autoComplete="username"
+          className={fieldClass}
           id="username"
           name="username"
-          placeholder="F001978"
           required
         />
       </div>
+
       <div>
-        <label className="text-sm font-medium text-slate-200" htmlFor="password">
+        <label
+          className="block text-[12px] font-semibold tracking-wide text-[#57534e] uppercase"
+          htmlFor="password"
+        >
           Password
         </label>
         <input
-          className="mt-2 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white outline-none ring-cyan-400/30 placeholder:text-slate-500 focus:ring-4"
+          autoComplete="current-password"
+          className={fieldClass}
           id="password"
           name="password"
-          placeholder="F001978"
-          type="password"
           required
+          type="password"
         />
       </div>
-      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+
+      {error ? (
+        <p className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">
+          {error}
+        </p>
+      ) : null}
+
       <button
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+        className="group relative mt-2 inline-flex w-full min-h-[52px] touch-manipulation items-center justify-center overflow-hidden rounded-lg bg-[#1a3a32] px-4 py-3.5 text-[15px] font-semibold tracking-wide text-white transition hover:bg-[#234f44] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
         disabled={isPending}
         type="submit"
       >
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-white/20"
+        />
         <ButtonLoadingContent loading={isPending} loadingText="Signing in…">
-          Sign in
+          Login
         </ButtonLoadingContent>
       </button>
     </form>

@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { approvedForAdminWhere, doctorListWhere } from "@/lib/doctor-access";
 import { prisma } from "@/lib/prisma";
 import { deleteDoctorFlyer } from "@/lib/generate-doctor-flyer";
 import { deleteObject } from "@/lib/spaces";
@@ -28,10 +29,9 @@ export async function DELETE(request: Request) {
     const edited = await prisma.editedVideo.findFirst({
       where: {
         doctorId,
-        doctor:
-          session.user.role === "ADMIN"
-            ? {}
-            : { createdByEmployeeId: session.user.id },
+        doctor: {
+          AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+        },
       },
       include: { asset: true },
     });
@@ -40,8 +40,19 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Merged video not found" }, { status: 404 });
     }
 
-    await deleteObject(edited.asset.storageUrl);
     await deleteDoctorFlyer(doctorId);
+
+    try {
+      const host = new URL(edited.asset.storageUrl).hostname.toLowerCase();
+      const isSpacesHost =
+        host.includes("digitaloceanspaces.com") ||
+        host.includes("cdn.digitaloceanspaces.com");
+      if (isSpacesHost) {
+        await deleteObject(edited.asset.storageUrl);
+      }
+    } catch (cleanupError) {
+      console.error("[edited-videos/delete] storage cleanup skipped", cleanupError);
+    }
 
     await prisma.$transaction([
       prisma.editedVideo.delete({ where: { id: edited.id } }),

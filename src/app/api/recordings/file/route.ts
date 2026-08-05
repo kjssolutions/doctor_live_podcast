@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { canViewAnswers, doctorListWhere } from "@/lib/doctor-access";
 import { prisma } from "@/lib/prisma";
 import { getSpacesClient, getSpacesConfig, parseStorageKey } from "@/lib/spaces";
 
@@ -21,6 +22,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!canViewAnswers(session.user)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const url = new URL(request.url);
   const recordingId = url.searchParams.get("recordingId") ?? "";
   const download = url.searchParams.get("download") === "1";
@@ -32,10 +37,7 @@ export async function GET(request: Request) {
   const recording = await prisma.answerRecording.findFirst({
     where: {
       id: recordingId,
-      doctor:
-        session.user.role === "ADMIN"
-          ? {}
-          : { createdByEmployeeId: session.user.id },
+      doctor: doctorListWhere(session.user),
     },
     include: {
       doctor: true,

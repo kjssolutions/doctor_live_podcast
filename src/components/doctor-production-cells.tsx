@@ -31,7 +31,7 @@ export function DoctorProductionCells({
   const hasSpotifyUrl = Boolean(spotifyUrl.trim());
 
   const spotifyPlaceholder = useMemo(() => {
-    if (!hasMergedVideo) return "Upload merged video first.";
+    if (!hasMergedVideo) return "Add merged video URL first.";
     return "Paste Spotify episode link here…";
   }, [hasMergedVideo]);
 
@@ -165,7 +165,7 @@ export function DoctorProductionCells({
             <option disabled={!hasMergedVideo || hasSpotifyUrl} value="DONE">
               Done
               {!hasMergedVideo
-                ? " (upload merged video first)"
+                ? " (add merged video URL first)"
                 : hasSpotifyUrl
                   ? " (remove Spotify URL first)"
                   : ""}
@@ -173,7 +173,7 @@ export function DoctorProductionCells({
             <option disabled={!hasMergedVideo || !hasSpotifyUrl} value="SPOTIFY">
               Spotify
               {!hasMergedVideo
-                ? " (upload merged video first)"
+                ? " (add merged video URL first)"
                 : !hasSpotifyUrl
                   ? " (add Spotify URL first)"
                   : ""}
@@ -184,7 +184,7 @@ export function DoctorProductionCells({
           {saving ? <p className="text-xs text-slate-500">Saving…</p> : null}
           {!hasMergedVideo ? (
             <p className="text-xs text-slate-500">
-              Upload merged video first. Then set Done, add Spotify URL, and set Spotify.
+              Add merged video URL first. Then set Done, add Spotify URL, and set Spotify.
             </p>
           ) : hasSpotifyUrl ? (
             <p className="text-xs text-slate-500">

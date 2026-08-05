@@ -3,22 +3,47 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { doctorAssetSnapshot } from "@/lib/doctor-asset-fields";
+import { approvedForAdminWhere, doctorByIdWhere } from "@/lib/doctor-access";
 import { prisma } from "@/lib/prisma";
-import { buildEditedVideoKey } from "@/lib/storage-keys";
-import { uploadObject } from "@/lib/spaces";
+import { deleteObject, isFullStorageUrl } from "@/lib/spaces";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
 
-const MAX_BYTES = 500 * 1024 * 1024;
-
-function parseDurationSeconds(raw: string) {
-  const value = Number(raw);
-  if (!raw || Number.isNaN(value) || value <= 0) {
+function normalizeMergedVideoUrl(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
     return null;
   }
-  return Math.round(value);
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function safeDeleteManagedObject(storageUrl: string) {
+  if (!isFullStorageUrl(storageUrl)) {
+    return;
+  }
+
+  try {
+    const host = new URL(storageUrl).hostname.toLowerCase();
+    const isSpacesHost =
+      host.includes("digitaloceanspaces.com") ||
+      host.includes("cdn.digitaloceanspaces.com");
+    if (!isSpacesHost) {
+      return;
+    }
+    await deleteObject(storageUrl);
+  } catch (error) {
+    console.error("[edited-videos/upload] old storage cleanup failed", error);
+  }
 }
 
 export async function POST(request: Request) {
@@ -28,35 +53,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const formData = await request.formData();
-    const doctorIdRaw = String(formData.get("doctorId") ?? "");
-    const file = formData.get("file");
-    const durationSeconds = parseDurationSeconds(
-      String(formData.get("durationSeconds") ?? ""),
-    );
+    const body = (await request.json().catch(() => null)) as {
+      doctorId?: number | string;
+      url?: string;
+    } | null;
 
-    const doctorId = Number(doctorIdRaw);
-    if (!doctorIdRaw || Number.isNaN(doctorId)) {
+    const doctorId = Number(body?.doctorId);
+    if (!body?.doctorId || Number.isNaN(doctorId)) {
       return NextResponse.json({ error: "Invalid doctorId" }, { status: 400 });
     }
 
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: "Missing file" }, { status: 400 });
+    const storageUrl = normalizeMergedVideoUrl(String(body?.url ?? ""));
+    if (!storageUrl) {
+      return NextResponse.json(
+        { error: "Enter a valid http(s) video URL." },
+        { status: 400 },
+      );
     }
 
-    if (file.size <= 0) {
-      return NextResponse.json({ error: "Empty file" }, { status: 400 });
-    }
-
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json({ error: "File too large (max 500 MB)" }, { status: 413 });
+    if (storageUrl.length > 1024) {
+      return NextResponse.json(
+        { error: "URL is too long (max 1024 characters)." },
+        { status: 400 },
+      );
     }
 
     const doctor = await prisma.doctor.findFirst({
-      where:
-        session.user.role === "ADMIN"
-          ? { id: doctorId }
-          : { id: doctorId, createdByEmployeeId: session.user.id },
+      where: {
+        AND: [doctorByIdWhere(session.user, doctorId), approvedForAdminWhere()],
+      },
       select: {
         id: true,
         doctorName: true,
@@ -69,33 +94,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
     }
 
-    const mimeType = file.type || "video/mp4";
-    const key = buildEditedVideoKey(
-      doctor.id,
-      doctor.doctorName,
-      doctor.doctorCode,
-      mimeType,
-    );
-
-    const body = Buffer.from(await file.arrayBuffer());
-    const storageUrl = await uploadObject({ key, body, mimeType });
     const snapshot = doctorAssetSnapshot(doctor);
-
     const assetPayload = {
       ...snapshot,
       assetKind: "EDITED_VIDEO" as const,
       storageUrl,
-      mimeType,
-      sizeBytes: body.length,
-      durationSeconds,
+      mimeType: "application/octet-stream",
+      sizeBytes: 0,
+      durationSeconds: null as number | null,
     };
 
     const existingEdited = await prisma.editedVideo.findUnique({
       where: { doctorId: doctor.id },
-      select: { id: true, assetId: true },
+      select: { id: true, assetId: true, storageUrl: true },
     });
 
     if (existingEdited) {
+      const previousUrl = existingEdited.storageUrl;
       await prisma.asset.update({
         where: { id: existingEdited.assetId },
         data: assetPayload,
@@ -111,11 +126,14 @@ export async function POST(request: Request) {
         },
       });
 
+      if (previousUrl && previousUrl !== storageUrl) {
+        await safeDeleteManagedObject(previousUrl);
+      }
+
       return NextResponse.json({
         editedVideoId: existingEdited.id,
         assetId: existingEdited.assetId,
         storageUrl,
-        durationSeconds,
       });
     }
 
@@ -140,12 +158,11 @@ export async function POST(request: Request) {
       editedVideoId: editedVideo.id,
       assetId: asset.id,
       storageUrl,
-      durationSeconds,
     });
   } catch (error) {
     console.error("[edited-videos/upload]", error);
     const message =
-      error instanceof Error ? error.message : "Upload failed. Please try again.";
+      error instanceof Error ? error.message : "Save failed. Please try again.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

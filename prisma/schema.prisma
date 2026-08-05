@@ -25,9 +25,11 @@ enum RecordingStatus {
 }
 
 enum PostProductionStatus {
+  CREATED
   PROCESSING
   DONE
   SPOTIFY
+  REJECTED
 }
 
 enum AssetKind {
@@ -39,15 +41,19 @@ enum AssetKind {
 /// MR login — maps to existing tbl_employee
 model Employee {
   empEmployeeId   String        @id @map("emp_employee_id") @db.VarChar(30)
-  empName         String?       @map("emp_name") @db.VarChar(45)
+  empName         String?       @map("emp_name") @db.VarChar(255)
   empDesignation  String?       @map("emp_designation") @db.VarChar(100)
   empUsername     String        @map("emp_username") @db.VarChar(50)
   empPassword     String        @map("emp_password") @db.VarChar(255)
   empHeadquarters String?       @map("emp_headquarters") @db.VarChar(255)
+  area            String?       @db.VarChar(100)
   region          String?       @db.VarChar(100)
   zone            String?       @db.VarChar(50)
-  l1Manager       String?       @map("l1_manager") @db.VarChar(255)
+  division        String?       @db.VarChar(100)
+  role            String?       @db.VarChar(50)
   l1ManagerId     String?       @map("l1_manager_id") @db.VarChar(50)
+  l2ManagerId     String?       @map("l2_manager_id") @db.VarChar(50)
+  l3ManagerId     String?       @map("l3_manager_id") @db.VarChar(50)
   doctors         Doctor[]
   editedVideos    EditedVideo[]
 
@@ -65,6 +71,7 @@ model Doctor {
   l1Manager           String?           @map("l1_manager") @db.VarChar(255)
   l1ManagerId         String?           @map("l1_manager_id") @db.VarChar(50)
   imageUrl            String?           @map("image_url") @db.Text
+  thumbUrl            String?           @map("thumb_url") @db.Text
   interviewToken      String?           @unique @map("interview_token") @db.VarChar(191)
   interviewStatus     InterviewStatus?  @default(SENT) @map("interview_status")
   createdByEmployeeId String?           @map("created_by_employee_id") @db.VarChar(30)
@@ -75,7 +82,7 @@ model Doctor {
   completedAt         DateTime?         @map("completed_at")
   podcastCreatedAt    DateTime?         @map("podcast_created_at")
   podcastUpdatedAt    DateTime?         @updatedAt @map("podcast_updated_at")
-  postProductionStatus PostProductionStatus @default(PROCESSING) @map("post_production_status")
+  postProductionStatus PostProductionStatus @default(CREATED) @map("post_production_status")
   spotifyUrl          String?           @map("spotify_url") @db.Text
   recordings          AnswerRecording[]
   editedVideo         EditedVideo?

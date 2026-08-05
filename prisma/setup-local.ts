@@ -80,15 +80,19 @@ async function createFreshSchema(conn: mariadb.Connection) {
   await conn.query(`
     CREATE TABLE IF NOT EXISTS tbl_employee (
       emp_employee_id VARCHAR(30) NOT NULL,
-      emp_name VARCHAR(45) NULL,
+      emp_name VARCHAR(255) NULL,
       emp_designation VARCHAR(100) NULL,
       emp_username VARCHAR(50) NOT NULL,
       emp_password VARCHAR(255) NOT NULL,
       emp_headquarters VARCHAR(255) NULL,
+      area VARCHAR(100) NULL,
       region VARCHAR(100) NULL,
       zone VARCHAR(50) NULL,
-      l1_manager VARCHAR(255) NULL,
+      division VARCHAR(100) NULL,
+      role VARCHAR(50) NULL,
       l1_manager_id VARCHAR(50) NULL,
+      l2_manager_id VARCHAR(50) NULL,
+      l3_manager_id VARCHAR(50) NULL,
       PRIMARY KEY (emp_employee_id)
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);

@@ -4,34 +4,35 @@ import { LoginForm } from "@/app/login/login-form";
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-12">
-      <section className="grid w-full max-w-5xl gap-8 rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-cyan-950/30 md:grid-cols-[1.1fr_0.9fr] md:p-10">
-        <div className="flex flex-col justify-between rounded-2xl bg-cyan-400 p-8 text-slate-950">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.3em]">
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#f7f5f1] px-4 py-12 sm:px-6">
+      {/* Soft paper-tone atmosphere */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_10%_0%,#ebe6dc_0%,transparent_50%),radial-gradient(ellipse_70%_50%_at_100%_100%,#e4ece8_0%,transparent_45%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#1a3a32]/25 to-transparent"
+      />
+
+      <section className="relative w-full max-w-[26rem]">
+        <div className="overflow-hidden rounded-[1.35rem] border border-[#d9d3c8]/80 bg-white shadow-[0_24px_60px_-28px_rgba(26,58,50,0.35)]">
+          {/* Brand bar */}
+          <div className="border-b border-[#ece7df] bg-gradient-to-br from-[#1a3a32] to-[#234f44] px-6 py-8 text-center sm:px-8 sm:py-9">
+            <h1 className="text-[1.45rem] font-semibold tracking-tight text-white sm:text-[1.7rem]">
               Doctor Live Podcast
-            </p>
-            <h1 className="mt-8 text-4xl font-bold tracking-tight md:text-5xl">
-              Capture expert doctor answers for polished video podcasts.
             </h1>
           </div>
-          <p className="mt-10 text-base text-slate-800">
-            MR users create secure links, doctors record guided answers, and
-            teams review clips for manual podcast production.
-          </p>
-        </div>
-        <div className="flex flex-col justify-center p-2 md:p-6">
-          <div className="mb-8">
-            <p className="text-sm font-medium text-cyan-300">Employee Login</p>
-            <h2 className="mt-2 text-3xl font-semibold">Welcome back</h2>
-            <p className="mt-3 text-sm text-slate-400">
-              Sign in with your employee ID and password. Example: F001978 /
-              F001978
-            </p>
+
+          <div className="px-6 py-7 sm:px-8 sm:py-8">
+            <Suspense
+              fallback={
+                <div className="h-44 animate-pulse rounded-xl bg-[#f3efe8]" />
+              }
+            >
+              <LoginForm />
+            </Suspense>
           </div>
-          <Suspense>
-            <LoginForm />
-          </Suspense>
         </div>
       </section>
     </main>
