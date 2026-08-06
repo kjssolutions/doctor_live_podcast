@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, ExternalLink, User } from "lucide-react";
+import { ArrowLeft, User } from "lucide-react";
 
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { DownloadFlyerButton } from "@/components/download-flyer-button";
@@ -78,7 +78,6 @@ export default async function DoctorReviewPage({
         include: { asset: true, question: true },
         orderBy: [{ question: { order: "asc" } }, { attemptNumber: "desc" }],
       },
-      editedVideo: { include: { asset: true } },
     },
   });
 
@@ -194,60 +193,6 @@ export default async function DoctorReviewPage({
           </DetailItem>
           <DetailItem label="Doctor code">{doctor.doctorCode}</DetailItem>
         </div>
-
-        {(doctor.thumbUrl || doctor.editedVideo || doctor.spotifyUrl) && (
-          <div className="grid gap-4 border-b border-slate-100 px-4 py-5 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
-            <DetailItem label="Thumbnail">
-              {doctor.thumbUrl ? (
-                <a
-                  className="mt-1 block w-40 overflow-hidden rounded-md border border-slate-200"
-                  href={doctor.thumbUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    alt={`${doctorLabel} thumbnail`}
-                    className="aspect-video w-full object-cover"
-                    src={doctor.thumbUrl}
-                  />
-                </a>
-              ) : (
-                <span className="text-slate-400">Not generated</span>
-              )}
-            </DetailItem>
-            <DetailItem label="Merged video">
-              {doctor.editedVideo?.storageUrl ? (
-                <a
-                  className="inline-flex items-center gap-1 text-emerald-700 hover:underline"
-                  href={doctor.editedVideo.storageUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open merged video
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              ) : (
-                <span className="text-slate-400">Not added</span>
-              )}
-            </DetailItem>
-            <DetailItem label="Spotify">
-              {doctor.spotifyUrl ? (
-                <a
-                  className="inline-flex items-center gap-1 text-sky-700 hover:underline"
-                  href={doctor.spotifyUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open Spotify
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              ) : (
-                <span className="text-slate-400">Not added</span>
-              )}
-            </DetailItem>
-          </div>
-        )}
 
         <div className="px-4 py-5 sm:px-6">
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">

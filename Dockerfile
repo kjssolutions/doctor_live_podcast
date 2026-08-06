@@ -10,6 +10,8 @@ RUN apt-get update -y \
 COPY package.json package-lock.json ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
 COPY prisma.config.ts ./
+# postinstall runs prisma generate + this script
+COPY scripts/copy-mediapipe-wasm.mjs ./scripts/copy-mediapipe-wasm.mjs
 RUN npm ci
 
 FROM node:20-bookworm-slim AS builder
