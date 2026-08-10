@@ -1,19 +1,15 @@
-import { CheckCircle2, Clock3, FilePlus2, Music2, Users, XCircle } from "lucide-react";
+import { Clock3, FilePlus2, Music2, Users } from "lucide-react";
 
 export function DashboardStats({
   total,
   created,
   processing,
   published,
-  rejected,
-  pending,
 }: {
   total: number;
   created: number;
   processing: number;
   published: number;
-  rejected: number;
-  pending: number;
 }) {
   const cards = [
     {
@@ -23,15 +19,15 @@ export function DashboardStats({
       icon: Users,
     },
     {
-      label: "Created",
+      label: "Pending",
       value: created,
-      hint: "Awaiting manager approval",
+      hint: "Awaiting recordings",
       icon: FilePlus2,
     },
     {
       label: "Processing",
       value: processing,
-      hint: "Approved / in edit",
+      hint: "Recordings complete",
       icon: Clock3,
     },
     {
@@ -40,22 +36,10 @@ export function DashboardStats({
       hint: "Live on Spotify",
       icon: Music2,
     },
-    {
-      label: "Rejected",
-      value: rejected,
-      hint: "Needs Sales cleanup",
-      icon: XCircle,
-    },
-    {
-      label: "Pending interview",
-      value: pending,
-      hint: "Awaiting completion",
-      icon: CheckCircle2,
-    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6 lg:gap-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:gap-4">
       {cards.map((card) => (
         <article
           className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5"

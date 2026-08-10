@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { InterviewRecorderLoader } from "@/app/interview/[token]/interview-recorder-loader";
 import { getActiveQuestions, getDoctorByInterviewToken } from "@/lib/interviews";
 import { prisma } from "@/lib/prisma";
+import { normalizeStorageUrlForDb } from "@/lib/spaces";
 
 export default async function PublicInterviewPage({
   params,
@@ -63,6 +64,9 @@ export default async function PublicInterviewPage({
       doctor={{
         name: doctor.doctorName ?? doctor.doctorCode,
         specialty: doctor.specialty,
+        imageUrl: doctor.imageUrl
+          ? normalizeStorageUrlForDb(doctor.imageUrl)
+          : null,
       }}
       questions={questions.map((question) => ({
         id: question.id,

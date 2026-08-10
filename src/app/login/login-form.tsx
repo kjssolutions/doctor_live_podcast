@@ -1,13 +1,12 @@
 "use client";
 
-import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { getSession, signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { ButtonLoadingContent } from "@/components/ui/button-loading";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -27,8 +26,26 @@ export function LoginForm() {
         return;
       }
 
-      router.push(searchParams.get("callbackUrl") ?? "/dashboard");
-      router.refresh();
+      const callbackUrl = searchParams.get("callbackUrl");
+      const session = await getSession();
+      const role = String(session?.user?.role ?? "").toUpperCase();
+      const isAdmin = role === "ADMIN";
+
+      if (callbackUrl === "/admin" || callbackUrl?.startsWith("/admin/")) {
+        if (!isAdmin) {
+          setError("Admin login required to open the admin panel.");
+          return;
+        }
+        window.location.assign("/admin");
+        return;
+      }
+
+      if (callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")) {
+        window.location.assign(callbackUrl);
+        return;
+      }
+
+      window.location.assign(isAdmin ? "/admin" : "/dashboard");
     });
   }
 

@@ -1,13 +1,9 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-
 import {
   AdminDoctorsPanel,
   type AdminDoctorRow,
 } from "@/components/admin-doctors-panel";
 import { AdminStats } from "@/components/admin-stats";
-import { authOptions } from "@/lib/auth";
-import { doctorListWhere, approvedForAdminWhere } from "@/lib/doctor-access";
+import { approvedForAdminWhere } from "@/lib/doctor-access";
 import { getDisplayPostProductionStatus } from "@/lib/post-production";
 import { prisma } from "@/lib/prisma";
 
@@ -32,13 +28,10 @@ function groupLatestByQuestion(
 }
 
 export default async function AdminPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/login");
-
   const doctors = await prisma.doctor.findMany({
     where: {
       interviewToken: { not: null },
-      AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+      ...approvedForAdminWhere(),
     },
     include: {
       createdBy: true,
@@ -78,7 +71,6 @@ export default async function AdminPage() {
     };
   });
 
-  const withRecordings = rows.filter((row) => row.recordings.length > 0).length;
   const withMerged = rows.filter((row) => row.hasMergedVideo).length;
   const spotifyDone = rows.filter(
     (row) =>
@@ -106,7 +98,6 @@ export default async function AdminPage() {
         spotifyDone={spotifyDone}
         total={rows.length}
         withMerged={withMerged}
-        withRecordings={withRecordings}
       />
 
       <AdminDoctorsPanel doctors={rows} />

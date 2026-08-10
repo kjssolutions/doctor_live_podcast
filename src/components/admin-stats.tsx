@@ -2,12 +2,10 @@ import { Clapperboard, Music2, Video } from "lucide-react";
 
 export function AdminStats({
   total,
-  withRecordings,
   withMerged,
   spotifyDone,
 }: {
   total: number;
-  withRecordings: number;
   withMerged: number;
   spotifyDone: number;
 }) {
@@ -19,13 +17,7 @@ export function AdminStats({
       icon: Video,
     },
     {
-      label: "With recordings",
-      value: withRecordings,
-      hint: "Submitted answers",
-      icon: Clapperboard,
-    },
-    {
-      label: "Merged uploaded",
+      label: "Video uploaded",
       value: withMerged,
       hint: "Final video ready",
       icon: Clapperboard,
@@ -42,7 +34,7 @@ export function AdminStats({
     <div className="flex flex-wrap gap-3 sm:gap-4">
       {cards.map((card) => (
         <article
-          className="min-w-[calc(50%-0.375rem)] flex-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:min-w-[calc(50%-0.5rem)] sm:p-5 lg:min-w-[calc(25%-0.75rem)]"
+          className="min-w-[calc(50%-0.375rem)] flex-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:min-w-[calc(50%-0.5rem)] sm:p-5 lg:min-w-[calc(33.333%-0.75rem)]"
           key={card.label}
         >
           <div className="flex items-start justify-between gap-2">

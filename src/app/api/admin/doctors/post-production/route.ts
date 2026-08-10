@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { doctorByIdWhere, approvedForAdminWhere } from "@/lib/doctor-access";
 import { deleteDoctorFlyer, generateDoctorFlyer } from "@/lib/generate-doctor-flyer";
+import { resolveAdminUser } from "@/lib/open-admin";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -12,7 +13,8 @@ const ALLOWED = new Set(["PROCESSING", "DONE", "SPOTIFY"]);
 
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const adminUser = resolveAdminUser(session?.user);
+  if (!adminUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -42,7 +44,7 @@ export async function PATCH(request: Request) {
 
   const doctor = await prisma.doctor.findFirst({
     where: {
-      AND: [doctorByIdWhere(session.user, doctorId), approvedForAdminWhere()],
+      AND: [doctorByIdWhere(adminUser, doctorId), approvedForAdminWhere()],
     },
     select: {
       id: true,

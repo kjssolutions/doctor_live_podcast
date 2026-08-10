@@ -4,9 +4,7 @@ import { Copy, Filter, Search, User } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { DeleteRejectedDoctorButton } from "@/components/delete-rejected-doctor-button";
 import { DownloadFlyerButton } from "@/components/download-flyer-button";
-import { ManagerApproveRejectButtons } from "@/components/manager-approve-reject-buttons";
 import { ButtonSpinner } from "@/components/ui/button-loading";
 import {
   formatPostProductionStatus,
@@ -32,8 +30,6 @@ export type DashboardDoctorRow = {
   editedVideoLabel: string | null;
   editedVideoUrl: string | null;
   canViewAnswers: boolean;
-  canApproveReject: boolean;
-  canDeleteRejected: boolean;
   showRecordingLink: boolean;
 };
 
@@ -159,14 +155,6 @@ function RowActions({ doctor }: { doctor: DashboardDoctorRow }) {
           Review answers
         </Link>
       ) : null}
-      <ManagerApproveRejectButtons
-        doctorId={doctor.id}
-        show={doctor.canApproveReject}
-      />
-      <DeleteRejectedDoctorButton
-        doctorId={doctor.id}
-        show={doctor.canDeleteRejected}
-      />
       <DownloadFlyerButton
         doctorId={doctor.id}
         interviewCompleted={doctor.interviewCompleted}
@@ -334,11 +322,10 @@ export function DashboardDoctorsTable({
                     value={statusFilter}
                   >
                     <option value="ALL">All statuses</option>
-                    <option value="CREATED">Created</option>
+                    <option value="CREATED">Pending</option>
                     <option value="PROCESSING">Processing</option>
                     <option value="DONE">Done</option>
                     <option value="SPOTIFY">Spotify</option>
-                    <option value="REJECTED">Rejected</option>
                   </select>
                 </label>
                 <label className="block">

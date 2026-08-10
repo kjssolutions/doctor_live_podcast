@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { doctorAssetSnapshot } from "@/lib/doctor-asset-fields";
 import { approvedForAdminWhere, doctorByIdWhere } from "@/lib/doctor-access";
 import { prisma } from "@/lib/prisma";
+import { resolveAdminUser } from "@/lib/open-admin";
 import { deleteObject, isFullStorageUrl } from "@/lib/spaces";
 
 export const runtime = "nodejs";
@@ -49,7 +50,8 @@ async function safeDeleteManagedObject(storageUrl: string) {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const adminUser = resolveAdminUser(session?.user);
+    if (!adminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
 
     const doctor = await prisma.doctor.findFirst({
       where: {
-        AND: [doctorByIdWhere(session.user, doctorId), approvedForAdminWhere()],
+        AND: [doctorByIdWhere(adminUser, doctorId), approvedForAdminWhere()],
       },
       select: {
         id: true,
@@ -92,6 +94,22 @@ export async function POST(request: Request) {
 
     if (!doctor) {
       return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
+    }
+
+    // Prefer logged-in emp_employee_id; otherwise MR who created the doctor.
+    let createdByEmployeeId: string | null = null;
+    const candidateIds = [session?.user?.id, doctor.createdByEmployeeId].filter(
+      (id): id is string => Boolean(id?.trim()),
+    );
+    for (const candidateId of candidateIds) {
+      const employee = await prisma.employee.findUnique({
+        where: { empEmployeeId: candidateId },
+        select: { empEmployeeId: true },
+      });
+      if (employee) {
+        createdByEmployeeId = employee.empEmployeeId;
+        break;
+      }
     }
 
     const snapshot = doctorAssetSnapshot(doctor);
@@ -122,7 +140,7 @@ export async function POST(request: Request) {
           doctorCode: snapshot.doctorCode,
           doctorName: snapshot.doctorName,
           storageUrl,
-          createdByEmployeeId: session.user.id,
+          createdByEmployeeId,
         },
       });
 
@@ -149,7 +167,7 @@ export async function POST(request: Request) {
         doctorName: snapshot.doctorName,
         assetId: asset.id,
         storageUrl,
-        createdByEmployeeId: session.user.id,
+        createdByEmployeeId,
       },
       select: { id: true },
     });

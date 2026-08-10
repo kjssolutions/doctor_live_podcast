@@ -10,7 +10,7 @@ export type AdminEditableStatus = "PROCESSING" | "DONE" | "SPOTIFY";
 
 /** Status label shown to MR / manager / read-only views. */
 export function formatPostProductionStatus(status: PostProductionStatus): string {
-  if (status === "CREATED") return "Created";
+  if (status === "CREATED") return "Pending";
   if (status === "PROCESSING") return "Processing";
   if (status === "DONE") return "Done";
   if (status === "REJECTED") return "Rejected";
@@ -19,7 +19,7 @@ export function formatPostProductionStatus(status: PostProductionStatus): string
 
 /**
  * Effective status for display: Spotify link always means Spotify on dashboards.
- * CREATED / REJECTED pass through unchanged.
+ * CREATED (Pending) / REJECTED pass through unchanged.
  */
 export function getDisplayPostProductionStatus(
   status: PostProductionStatus,

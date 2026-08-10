@@ -10,23 +10,18 @@ export function sessionAppRole(user: SessionUser): AppRole {
   return getAppRole(user.role);
 }
 
+/** Only MR (Sales) can create doctors — not managers or admin. */
 export function canCreateDoctor(user: SessionUser): boolean {
-  const role = sessionAppRole(user);
-  return role === "SALES" || role === "ADMIN";
+  return sessionAppRole(user) === "SALES";
+}
+
+export function canAccessAdmin(user: SessionUser): boolean {
+  return sessionAppRole(user) === "ADMIN";
 }
 
 export function canViewAnswers(user: SessionUser): boolean {
   const role = sessionAppRole(user);
   return role === "2LMANAGER" || role === "3LMANAGER" || role === "ADMIN";
-}
-
-export function canApproveReject(user: SessionUser): boolean {
-  const role = sessionAppRole(user);
-  return role === "2LMANAGER" || role === "3LMANAGER" || role === "ADMIN";
-}
-
-export function canDeleteRejected(user: SessionUser): boolean {
-  return sessionAppRole(user) === "SALES";
 }
 
 /** Prisma where clause for doctors visible to this user. */
@@ -49,7 +44,7 @@ export function doctorListWhere(user: SessionUser): Prisma.DoctorWhereInput {
   }
 }
 
-/** Doctors that 2L/3L have approved — visible in admin post-production. */
+/** Doctors ready for admin post-production (after all recordings). */
 export function approvedForAdminWhere(): Prisma.DoctorWhereInput {
   return {
     postProductionStatus: { in: ["PROCESSING", "DONE", "SPOTIFY"] },

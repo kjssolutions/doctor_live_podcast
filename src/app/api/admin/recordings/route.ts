@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { approvedForAdminWhere, doctorListWhere } from "@/lib/doctor-access";
 import { getActiveQuestions } from "@/lib/interviews";
+import { resolveAdminUser } from "@/lib/open-admin";
 import { prisma } from "@/lib/prisma";
 import { deleteObject } from "@/lib/spaces";
 
@@ -13,7 +14,8 @@ export const dynamic = "force-dynamic";
 export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const adminUser = resolveAdminUser(session?.user);
+    if (!adminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -30,7 +32,7 @@ export async function DELETE(request: Request) {
       where: {
         id: recordingId,
         doctor: {
-          AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+          AND: [doctorListWhere(adminUser), approvedForAdminWhere()],
         },
       },
       include: {

@@ -46,6 +46,7 @@ type Question = {
 type Doctor = {
   name: string;
   specialty: string | null;
+  imageUrl: string | null;
 };
 
 type UploadState = "idle" | "uploading" | "done" | "error";
@@ -938,6 +939,16 @@ export function InterviewRecorder({
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
             Doctor Live Podcast
           </p>
+          {doctor.imageUrl ? (
+            <div className="mx-auto mt-6 h-28 w-28 overflow-hidden rounded-full bg-slate-100 ring-2 ring-slate-200 sm:h-32 sm:w-32">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={doctor.name}
+                className="h-full w-full object-cover"
+                src={doctor.imageUrl}
+              />
+            </div>
+          ) : null}
           <h1 className="mt-6 text-3xl font-bold text-slate-900 sm:text-4xl">
             Welcome, {doctor.name}
           </h1>
@@ -951,9 +962,6 @@ export function InterviewRecorder({
               Your previous answers are saved. If the connection dropped, tap below
               to resume where you left off.
             </p>
-          ) : null}
-          {doctor.specialty ? (
-            <p className="mt-2 text-sm text-slate-500">{doctor.specialty}</p>
           ) : null}
           {!isSecureContext ? (
             <MobileCameraHelp hostname={window.location.hostname} token={token} />

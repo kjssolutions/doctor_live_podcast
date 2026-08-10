@@ -97,6 +97,9 @@ export async function POST(request: Request) {
       data: {
         interviewStatus: "COMPLETED",
         completedAt: new Date(),
+        ...(doctor.postProductionStatus === "CREATED"
+          ? { postProductionStatus: "PROCESSING" as const }
+          : {}),
       },
     });
   }

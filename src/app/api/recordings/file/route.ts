@@ -5,7 +5,12 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
-import { canViewAnswers, doctorListWhere } from "@/lib/doctor-access";
+import {
+  approvedForAdminWhere,
+  canViewAnswers,
+  doctorListWhere,
+} from "@/lib/doctor-access";
+import { ADMIN_OPEN_WITHOUT_LOGIN, resolveAdminUser } from "@/lib/open-admin";
 import { prisma } from "@/lib/prisma";
 import { getSpacesClient, getSpacesConfig, parseStorageKey } from "@/lib/spaces";
 
@@ -17,15 +22,6 @@ function safeFilename(input: string) {
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!canViewAnswers(session.user)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const url = new URL(request.url);
   const recordingId = url.searchParams.get("recordingId") ?? "";
   const download = url.searchParams.get("download") === "1";
@@ -34,10 +30,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing recordingId" }, { status: 400 });
   }
 
+  let doctorWhere;
+  if (session?.user && canViewAnswers(session.user)) {
+    doctorWhere = doctorListWhere(session.user);
+  } else if (ADMIN_OPEN_WITHOUT_LOGIN) {
+    const adminUser = resolveAdminUser(null);
+    doctorWhere = {
+      AND: [doctorListWhere(adminUser!), approvedForAdminWhere()],
+    };
+  } else {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const recording = await prisma.answerRecording.findFirst({
     where: {
       id: recordingId,
-      doctor: doctorListWhere(session.user),
+      doctor: doctorWhere,
     },
     include: {
       doctor: true,
@@ -77,7 +85,6 @@ export async function GET(request: Request) {
     headers.set("Content-Disposition", `inline; filename="${filename}"`);
   }
 
-  // Best-effort: allow seeking/playing in <video> without caching issues.
   headers.set("Accept-Ranges", "bytes");
 
   const body =
@@ -85,8 +92,5 @@ export async function GET(request: Request) {
       ? Readable.toWeb(result.Body)
       : (result.Body as unknown);
 
-  // Next.js route handlers accept web streams at runtime, but TypeScript's
-  // lib.dom vs node:stream/web types don't line up cleanly. Cast for TS.
   return new Response(body as any, { headers });
 }
-

@@ -12,9 +12,7 @@ import { DashboardStats } from "@/components/dashboard-stats";
 import { SignOutButton } from "@/components/sign-out-button";
 import { authOptions } from "@/lib/auth";
 import {
-  canApproveReject,
   canCreateDoctor,
-  canDeleteRejected,
   canViewAnswers,
   doctorListWhere,
   sessionAppRole,
@@ -44,8 +42,6 @@ export default async function DashboardPage() {
   const appRole = sessionAppRole(session.user);
   const showCreate = canCreateDoctor(session.user);
   const showAnswers = canViewAnswers(session.user);
-  const showApprove = canApproveReject(session.user);
-  const showDeleteRejected = canDeleteRejected(session.user);
 
   const doctors = await prisma.doctor.findMany({
     where: {
@@ -89,8 +85,6 @@ export default async function DashboardPage() {
       editedVideoLabel: fileLabelFromUrl(doctor.editedVideo?.storageUrl),
       editedVideoUrl: doctor.editedVideo?.storageUrl ?? null,
       canViewAnswers: showAnswers,
-      canApproveReject: showApprove && displayStatus === "CREATED",
-      canDeleteRejected: showDeleteRejected && displayStatus === "REJECTED",
       showRecordingLink: showCreate || appRole === "ADMIN",
     };
   });
@@ -101,8 +95,6 @@ export default async function DashboardPage() {
   const created = countByStatus("CREATED");
   const processing = countByStatus("PROCESSING");
   const published = countByStatus("SPOTIFY");
-  const rejected = countByStatus("REJECTED");
-  const pending = rows.filter((row) => !row.interviewCompleted).length;
 
   return (
     <div className="space-y-6 sm:space-y-7">
@@ -148,10 +140,8 @@ export default async function DashboardPage() {
 
       <DashboardStats
         created={created}
-        pending={pending}
         processing={processing}
         published={published}
-        rejected={rejected}
         total={rows.length}
       />
 

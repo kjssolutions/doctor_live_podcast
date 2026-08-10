@@ -18,7 +18,7 @@ const employees = [
     empPassword: "F001978",
     empHeadquarters: "TEZPUR",
     region: "NORTH EAST",
-    zone: "EAST",
+    zone: "EAST",
     l1ManagerId: "F017480",
   },
   {
@@ -29,7 +29,7 @@ const employees = [
     empPassword: "F001979",
     empHeadquarters: "GUWAHATI",
     region: "NORTH EAST",
-    zone: "EAST",
+    zone: "EAST",
     l1ManagerId: "F017480",
   },
   {
@@ -40,7 +40,7 @@ const employees = [
     empPassword: "F001980",
     empHeadquarters: "SILCHAR",
     region: "NORTH EAST",
-    zone: "EAST",
+    zone: "EAST",
     l1ManagerId: "F017480",
   },
   {
@@ -51,7 +51,7 @@ const employees = [
     empPassword: "F001981",
     empHeadquarters: "PATNA",
     region: "EAST",
-    zone: "EAST",
+    zone: "EAST",
     l1ManagerId: "F017481",
   },
   {
@@ -62,7 +62,7 @@ const employees = [
     empPassword: "F001982",
     empHeadquarters: "RANCHI",
     region: "EAST",
-    zone: "EAST",
+    zone: "EAST",
     l1ManagerId: "F017481",
   },
   {
@@ -73,7 +73,7 @@ const employees = [
     empPassword: "F001983",
     empHeadquarters: "HYDERABAD",
     region: "SOUTH",
-    zone: "SOUTH",
+    zone: "SOUTH",
     l1ManagerId: "F017482",
   },
   {
@@ -84,7 +84,7 @@ const employees = [
     empPassword: "F001984",
     empHeadquarters: "KOCHI",
     region: "SOUTH",
-    zone: "SOUTH",
+    zone: "SOUTH",
     l1ManagerId: "F017482",
   },
   {
@@ -95,7 +95,7 @@ const employees = [
     empPassword: "F001985",
     empHeadquarters: "MUMBAI",
     region: "WEST",
-    zone: "WEST",
+    zone: "WEST",
     l1ManagerId: "F017483",
   },
   {
@@ -106,7 +106,7 @@ const employees = [
     empPassword: "F001986",
     empHeadquarters: "PUNE",
     region: "WEST",
-    zone: "WEST",
+    zone: "WEST",
     l1ManagerId: "F017483",
   },
   {
@@ -117,7 +117,7 @@ const employees = [
     empPassword: "F001987",
     empHeadquarters: "DELHI",
     region: "NORTH",
-    zone: "NORTH",
+    zone: "NORTH",
     l1ManagerId: "F017484",
   },
   {
@@ -128,7 +128,7 @@ const employees = [
     empPassword: "F001988",
     empHeadquarters: "LUCKNOW",
     region: "NORTH",
-    zone: "NORTH",
+    zone: "NORTH",
     l1ManagerId: "F017484",
   },
   {
@@ -139,7 +139,7 @@ const employees = [
     empPassword: "F001989",
     empHeadquarters: "JAIPUR",
     region: "NORTH",
-    zone: "NORTH",
+    zone: "NORTH",
     l1ManagerId: "F017484",
   },
   {
@@ -150,7 +150,7 @@ const employees = [
     empPassword: "F001990",
     empHeadquarters: "KOLKATA",
     region: "EAST",
-    zone: "EAST",
+    zone: "EAST",
     l1ManagerId: "F017481",
   },
   {
@@ -161,7 +161,7 @@ const employees = [
     empPassword: "F001991",
     empHeadquarters: "CHENNAI",
     region: "SOUTH",
-    zone: "SOUTH",
+    zone: "SOUTH",
     l1ManagerId: "F017482",
   },
   {
@@ -172,7 +172,7 @@ const employees = [
     empPassword: "F001992",
     empHeadquarters: "NAGPUR",
     region: "WEST",
-    zone: "WEST",
+    zone: "WEST",
     l1ManagerId: "F017483",
   },
   {
@@ -183,7 +183,7 @@ const employees = [
     empPassword: "F001993",
     empHeadquarters: "INDORE",
     region: "CENTRAL",
-    zone: "CENTRAL",
+    zone: "CENTRAL",
     l1ManagerId: "F017485",
   },
   {
@@ -194,7 +194,7 @@ const employees = [
     empPassword: "F001994",
     empHeadquarters: "BHUBANESWAR",
     region: "EAST",
-    zone: "EAST",
+    zone: "EAST",
     l1ManagerId: "F017481",
   },
   {
@@ -205,7 +205,7 @@ const employees = [
     empPassword: "F001995",
     empHeadquarters: "AHMEDABAD",
     region: "WEST",
-    zone: "WEST",
+    zone: "WEST",
     l1ManagerId: "F017483",
   },
   {
@@ -216,7 +216,7 @@ const employees = [
     empPassword: "F001996",
     empHeadquarters: "BANGALORE",
     region: "SOUTH",
-    zone: "SOUTH",
+    zone: "SOUTH",
     l1ManagerId: "F017482",
   },
   {
@@ -227,7 +227,8 @@ const employees = [
     empPassword: "ADMIN123",
     empHeadquarters: "HQ",
     region: "ALL",
-    zone: "ALL",
+    zone: "ALL",
+    role: "ADMIN",
     l1ManagerId: "SYS001",
   },
 ];

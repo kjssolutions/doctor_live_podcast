@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { approvedForAdminWhere, doctorListWhere } from "@/lib/doctor-access";
 import { prisma } from "@/lib/prisma";
 import { deleteDoctorFlyer } from "@/lib/generate-doctor-flyer";
+import { resolveAdminUser } from "@/lib/open-admin";
 import { deleteObject } from "@/lib/spaces";
 
 export const runtime = "nodejs";
@@ -13,7 +14,8 @@ export const dynamic = "force-dynamic";
 export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const adminUser = resolveAdminUser(session?.user);
+    if (!adminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -30,7 +32,7 @@ export async function DELETE(request: Request) {
       where: {
         doctorId,
         doctor: {
-          AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+          AND: [doctorListWhere(adminUser), approvedForAdminWhere()],
         },
       },
       include: { asset: true },

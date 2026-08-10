@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { approvedForAdminWhere, doctorListWhere } from "@/lib/doctor-access";
+import { resolveAdminUser } from "@/lib/open-admin";
 import { prisma } from "@/lib/prisma";
 import { getSpacesClient, getSpacesConfig, parseStorageKey } from "@/lib/spaces";
 
@@ -17,7 +18,8 @@ function safeFilename(input: string) {
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const adminUser = resolveAdminUser(session?.user);
+  if (!adminUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
     where: {
       doctorId,
       doctor: {
-        AND: [doctorListWhere(session.user), approvedForAdminWhere()],
+        AND: [doctorListWhere(adminUser), approvedForAdminWhere()],
       },
     },
     include: {
@@ -78,4 +80,3 @@ export async function GET(request: Request) {
 
   return new Response(body as any, { headers });
 }
-

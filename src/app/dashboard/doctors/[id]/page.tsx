@@ -6,11 +6,9 @@ import { ArrowLeft, User } from "lucide-react";
 
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { DownloadFlyerButton } from "@/components/download-flyer-button";
-import { ManagerApproveRejectButtons } from "@/components/manager-approve-reject-buttons";
 import { RecordingModalPlayer } from "@/components/recording-modal-player";
 import { authOptions } from "@/lib/auth";
 import {
-  canApproveReject,
   canViewAnswers,
   doctorByIdWhere,
 } from "@/lib/doctor-access";
@@ -116,8 +114,6 @@ export default async function DoctorReviewPage({
 
   const interviewCompleted = doctor.interviewStatus === "COMPLETED";
   const doctorLabel = doctor.doctorName ?? doctor.doctorCode;
-  const showApprove =
-    canApproveReject(session.user) && displayPostProductionStatus === "CREATED";
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -130,7 +126,6 @@ export default async function DoctorReviewPage({
           Back to dashboard
         </Link>
         <div className="flex flex-wrap items-center gap-2">
-          <ManagerApproveRejectButtons doctorId={doctor.id} show={showApprove} />
           <CopyLinkButton url={interviewUrl} variant="light" />
           <DownloadFlyerButton
             doctorId={doctor.id}
