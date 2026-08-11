@@ -45,3 +45,7 @@ next-env.d.ts
 certificates
 # MediaPipe WASM (copied by scripts/copy-mediapipe-wasm.mjs on postinstall)
 /public/mediapipe/
+
+# Large local reference video (keep on disk for /interview; do not commit)
+/public/Videos/*.mp4
+

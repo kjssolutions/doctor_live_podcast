@@ -8,6 +8,7 @@ import {
   isIosDevice,
 } from "@/lib/background-blur";
 import { describeCameraBlocker } from "@/lib/camera-access";
+import { REFERENCE_VIDEO_SRC } from "@/lib/reference-video";
 import {
   Aperture,
   CheckCircle2,
@@ -56,7 +57,7 @@ function getQuestionVideoSrc(question: Question) {
   if (question.avatarVideoUrl) {
     return question.avatarVideoUrl;
   }
-  return `/Videos/question${question.order}.mp4`;
+  return REFERENCE_VIDEO_SRC;
 }
 
 function findFirstPendingQuestionIndex(
@@ -940,7 +941,7 @@ export function InterviewRecorder({
             Doctor Live Podcast
           </p>
           {doctor.imageUrl ? (
-            <div className="mx-auto mt-6 h-28 w-28 overflow-hidden rounded-full bg-slate-100 ring-2 ring-slate-200 sm:h-32 sm:w-32">
+            <div className="mx-auto mt-6 h-40 w-40 overflow-hidden rounded-full bg-slate-100 ring-2 ring-slate-200 sm:h-44 sm:w-44">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt={doctor.name}
@@ -957,6 +958,25 @@ export function InterviewRecorder({
               ? `You already submitted ${initialAccepted.size} of ${questions.length} answers. Continue from question ${currentIndex + 1} — only pending questions remain.`
               : "You will hear each podcast question, then record your answer on video. You can replay and retake before submitting."}
           </p>
+
+          <div className="mx-auto mt-6 w-full max-w-lg text-left">
+            <p className="mb-2 text-center text-[11px] font-semibold tracking-[0.2em] text-slate-500 uppercase">
+              Reference video
+            </p>
+            <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm sm:rounded-2xl">
+              <video
+                className="aspect-video w-full object-cover"
+                controls
+                playsInline
+                preload="metadata"
+                src={REFERENCE_VIDEO_SRC}
+              />
+            </div>
+            <p className="mt-2 text-center text-xs leading-5 text-slate-500">
+              Watch this sample first, then start your interview recording.
+            </p>
+          </div>
+
           {hasPartialProgress ? (
             <p className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
               Your previous answers are saved. If the connection dropped, tap below
@@ -1016,6 +1036,8 @@ export function InterviewRecorder({
 
   const portraitFrameClass =
     "relative mx-auto w-full max-w-[min(100%,22rem)] sm:max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-black shadow-lg";
+  const landscapeFrameClass =
+    "relative mx-auto w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm sm:rounded-2xl";
   const showCameraPlaceholder =
     stepPhase === "record" &&
     !isRecording &&
@@ -1071,9 +1093,9 @@ export function InterviewRecorder({
       <section className="flex-1">
         {stepPhase === "watch" ? (
           <div className="space-y-4 sm:space-y-5">
-            <div className={portraitFrameClass}>
+            <div className={landscapeFrameClass}>
               <video
-                className="aspect-[9/16] w-full bg-black object-contain"
+                className="aspect-video w-full object-cover"
                 controls
                 playsInline
                 preload="auto"

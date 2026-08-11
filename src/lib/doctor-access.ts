@@ -20,8 +20,8 @@ export function canAccessAdmin(user: SessionUser): boolean {
 }
 
 export function canViewAnswers(user: SessionUser): boolean {
-  const role = sessionAppRole(user);
-  return role === "2LMANAGER" || role === "3LMANAGER" || role === "ADMIN";
+  // 2L / 3L managers are list-only — no review-answers action.
+  return sessionAppRole(user) === "ADMIN";
 }
 
 /** Prisma where clause for doctors visible to this user. */
