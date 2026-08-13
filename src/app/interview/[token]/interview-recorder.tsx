@@ -8,6 +8,7 @@ import {
   isIosDevice,
 } from "@/lib/background-blur";
 import { describeCameraBlocker } from "@/lib/camera-access";
+import { getQuestionVideoSrc } from "@/lib/question-videos";
 import { REFERENCE_VIDEO_SRC } from "@/lib/reference-video";
 import {
   Aperture,
@@ -52,13 +53,6 @@ type Doctor = {
 
 type UploadState = "idle" | "uploading" | "done" | "error";
 type StepPhase = "watch" | "record" | "review";
-
-function getQuestionVideoSrc(question: Question) {
-  if (question.avatarVideoUrl) {
-    return question.avatarVideoUrl;
-  }
-  return REFERENCE_VIDEO_SRC;
-}
 
 function findFirstPendingQuestionIndex(
   questions: Question[],
@@ -1036,8 +1030,6 @@ export function InterviewRecorder({
 
   const portraitFrameClass =
     "relative mx-auto w-full max-w-[min(100%,22rem)] sm:max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-black shadow-lg";
-  const landscapeFrameClass =
-    "relative mx-auto w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm sm:rounded-2xl";
   const showCameraPlaceholder =
     stepPhase === "record" &&
     !isRecording &&
@@ -1093,13 +1085,15 @@ export function InterviewRecorder({
       <section className="flex-1">
         {stepPhase === "watch" ? (
           <div className="space-y-4 sm:space-y-5">
-            <div className={landscapeFrameClass}>
+            <div
+              className={`${portraitFrameClass} max-w-[min(100%,22rem,calc(62dvh*9/16))]`}
+            >
               <video
-                className="aspect-video w-full object-cover"
+                className="aspect-[9/16] w-full object-cover"
                 controls
                 playsInline
                 preload="auto"
-                src={getQuestionVideoSrc(currentQuestion)}
+                src={getQuestionVideoSrc(currentQuestion.order)}
               />
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

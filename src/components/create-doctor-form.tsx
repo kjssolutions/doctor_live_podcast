@@ -20,9 +20,11 @@ const labelClassName = "text-sm font-semibold text-slate-700";
 const initialState: CreateDoctorState = {};
 
 function ErrorPopup({
+  title,
   message,
   onClose,
 }: {
+  title: string;
   message: string;
   onClose: () => void;
 }) {
@@ -69,7 +71,7 @@ function ErrorPopup({
             className="mt-3 text-base font-semibold text-slate-900"
             id={dialogId}
           >
-            Entry already exists
+            {title}
           </h3>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">{message}</p>
         </div>
@@ -93,18 +95,26 @@ export function CreateDoctorForm() {
   const [state, formAction] = useActionState(createDoctorInterview, initialState);
   const [showErrorPopup, setShowErrorPopup] = useState(false);
 
+  const popupTitle = state.nameError
+    ? "Invalid doctor name"
+    : state.error
+      ? "Entry already exists"
+      : "";
+  const popupMessage = state.nameError ?? state.error ?? "";
+
   useEffect(() => {
-    if (state.error) {
+    if (state.error || state.nameError) {
       setShowErrorPopup(true);
     }
   }, [state]);
 
   return (
     <>
-      {showErrorPopup && state.error ? (
+      {showErrorPopup && popupMessage ? (
         <ErrorPopup
-          message={state.error}
+          message={popupMessage}
           onClose={() => setShowErrorPopup(false)}
+          title={popupTitle}
         />
       ) : null}
 
@@ -124,14 +134,30 @@ export function CreateDoctorForm() {
               <label className={labelClassName} htmlFor="doctorName">
                 Doctor name *
               </label>
-              <input
-                autoComplete="name"
-                className={inputClassName}
-                id="doctorName"
-                name="doctorName"
-                placeholder="Dr. Priya Shah"
-                required
-              />
+              <div
+                className={`mt-2 flex overflow-hidden rounded-xl border bg-white shadow-sm transition ${
+                  state.nameError
+                    ? "border-rose-400 focus-within:border-rose-500 focus-within:ring-4 focus-within:ring-rose-100"
+                    : "border-slate-200 hover:border-slate-300 focus-within:border-[#1a3a32]/40 focus-within:ring-4 focus-within:ring-[#1a3a32]/10"
+                }`}
+              >
+                <span className="inline-flex shrink-0 items-center border-r border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+                  DR.
+                </span>
+                <input
+                  aria-invalid={Boolean(state.nameError)}
+                  autoComplete="name"
+                  className="w-full border-0 bg-transparent px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                  id="doctorName"
+                  name="doctorName"
+                  placeholder="Drashti"
+                  required
+                />
+              </div>
+              <p className="mt-1.5 text-xs font-medium text-rose-600">
+                Type only the name (any case). Do not type DR / Dr / dr — it is
+                added automatically.
+              </p>
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2 sm:gap-6">
@@ -144,7 +170,6 @@ export function CreateDoctorForm() {
                   className={`${inputClassName}${state.error ? " border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
                   id="doctorCode"
                   name="doctorCode"
-                  placeholder="DOC-1024"
                   required
                 />
               </div>

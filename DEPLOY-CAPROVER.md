@@ -8,12 +8,12 @@ From the project root:
 npm run deploy:tar
 ```
 
-This creates `deploy.tar` in the project root (excludes `node_modules`, `.next`, `.git`, `.env`).
+This creates **`deploy.tar`** (~10MB): source + Dockerfile, no `node_modules` / `.next` / `.git` / `.env`, and excludes the large local `intas-demo.mp4` + `public/mediapipe` (MediaPipe is rebuilt on CapRover install).
 
 ## 2. CapRover app setup
 
 1. CapRover → **Apps** → create app (e.g. `doctor-podcast`)
-2. **Deployment** → method **Upload tar file** → upload `deploy.tar`
+2. **Deployment** → method **Upload tar file** → upload **`deploy.tar`**
 3. **HTTP Settings** → enable HTTPS, set your domain
 4. **App Configs** → **Environment Variables** → paste from `.env.caprover.example` (with real values)
 5. **App Configs** → container HTTP port: **3000**

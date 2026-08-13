@@ -24,6 +24,9 @@ import {
 import { prisma } from "@/lib/prisma";
 import { roleLabel } from "@/lib/roles";
 import { absoluteUrlFromRequest } from "@/lib/utils";
+import { formatDoctorDisplayName } from "@/lib/validations";
+
+export const dynamic = "force-dynamic";
 
 function fileLabelFromUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -65,7 +68,9 @@ export default async function DashboardPage() {
 
     return {
       id: doctor.id,
-      name: doctor.doctorName ?? doctor.doctorCode,
+      name: doctor.doctorName
+        ? formatDoctorDisplayName(doctor.doctorName)
+        : doctor.doctorCode,
       specialty: doctor.specialty,
       imageUrl: doctor.imageUrl,
       thumbUrl: doctor.thumbUrl,

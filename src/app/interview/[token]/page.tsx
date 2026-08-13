@@ -4,6 +4,9 @@ import { InterviewRecorderLoader } from "@/app/interview/[token]/interview-recor
 import { getActiveQuestions, getDoctorByInterviewToken } from "@/lib/interviews";
 import { prisma } from "@/lib/prisma";
 import { normalizeStorageUrlForDb } from "@/lib/spaces";
+import { formatDoctorDisplayName } from "@/lib/validations";
+
+export const dynamic = "force-dynamic";
 
 export default async function PublicInterviewPage({
   params,
@@ -62,7 +65,9 @@ export default async function PublicInterviewPage({
     <InterviewRecorderLoader
       completedQuestionIds={completedQuestionIds}
       doctor={{
-        name: doctor.doctorName ?? doctor.doctorCode,
+        name: doctor.doctorName
+          ? formatDoctorDisplayName(doctor.doctorName)
+          : doctor.doctorCode,
         specialty: doctor.specialty,
         imageUrl: doctor.imageUrl
           ? normalizeStorageUrlForDb(doctor.imageUrl)

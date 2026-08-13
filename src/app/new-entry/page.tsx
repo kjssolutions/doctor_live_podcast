@@ -5,6 +5,8 @@ import {
 import { getDisplayPostProductionStatus } from "@/lib/post-production";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 function groupLatestByQuestion(
   recordings: Array<{
     id: string;

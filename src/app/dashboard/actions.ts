@@ -15,6 +15,7 @@ import { doctorSchema } from "@/lib/validations";
 
 export type CreateDoctorState = {
   error?: string;
+  nameError?: string;
 };
 
 export async function createDoctorInterview(
@@ -38,9 +39,13 @@ export async function createDoctorInterview(
   });
 
   if (!parsedResult.success) {
+    const issue = parsedResult.error.issues[0];
+    if (issue?.path[0] === "doctorName") {
+      return { nameError: issue.message };
+    }
+
     return {
-      error:
-        parsedResult.error.issues[0]?.message ?? "Please check the form fields.",
+      error: issue?.message ?? "Please check the form fields.",
     };
   }
 

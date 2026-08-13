@@ -24,6 +24,8 @@ import { prisma } from "@/lib/prisma";
 import { normalizeStorageUrlForDb } from "@/lib/spaces";
 import { absoluteUrlFromRequest } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
+
 function DetailItem({
   label,
   children,
