@@ -236,30 +236,26 @@ const employees = [
 const questions = [
   {
     slug: "introduction",
-    title: "Doctor Introduction",
-    prompt:
-      "Please introduce yourself, your specialty, and the kind of patients you usually help.",
+    title: "What is epilepsy?",
+    prompt: "What is epilepsy?",
     order: 1,
   },
   {
     slug: "condition-awareness",
-    title: "Patient Awareness",
-    prompt:
-      "What should patients understand first about this health topic or treatment area?",
+    title: "Common signs of seizure",
+    prompt: "What are the common signs of seizure?",
     order: 2,
   },
   {
     slug: "common-myths",
-    title: "Common Myths",
-    prompt:
-      "What are the most common myths or mistakes patients have, and how do you guide them?",
+    title: "Help during a seizure",
+    prompt: "What should someone do if a person has a seizure?",
     order: 3,
   },
   {
     slug: "closing-advice",
-    title: "Closing Advice",
-    prompt:
-      "What final advice would you give patients who are considering speaking with a specialist?",
+    title: "Living with epilepsy",
+    prompt: "Can people with epilepsy live a normal life?",
     order: 4,
   },
 ];
