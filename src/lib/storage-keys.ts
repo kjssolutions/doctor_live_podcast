@@ -32,6 +32,28 @@ export function extensionForMimeType(mimeType: string) {
   return "bin";
 }
 
+/** Admin/Q1–Q4 downloads: prefer a playable video filename (mp4 when possible). */
+export function recordingVideoDownloadMeta(mimeType: string, storageUrl = "") {
+  const mime = mimeType.toLowerCase();
+  const url = storageUrl.toLowerCase();
+  const isMp4 = mime.includes("mp4") || url.includes(".mp4");
+  return {
+    ext: isMp4 ? "mp4" : "webm",
+    contentType: isMp4 ? "video/mp4" : mime || "video/webm",
+  };
+}
+
+export function recordingDownloadFilename(
+  doctorCode: string,
+  questionOrder: number,
+  mimeType: string,
+  storageUrl = "",
+) {
+  const { ext } = recordingVideoDownloadMeta(mimeType, storageUrl);
+  const code = doctorCode.replace(/[^a-zA-Z0-9._-]+/g, "_") || "doctor";
+  return `${code}-Q${questionOrder}.${ext}`;
+}
+
 function doctorFileLabel(
   doctorId: number,
   doctorName: string | null | undefined,

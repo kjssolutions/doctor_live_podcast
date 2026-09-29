@@ -4,18 +4,18 @@ import {
 } from "@/components/new-entry-doctors-panel";
 import { getDisplayPostProductionStatus } from "@/lib/post-production";
 import { prisma } from "@/lib/prisma";
+import { recordingDownloadFilename } from "@/lib/storage-keys";
 
 export const dynamic = "force-dynamic";
 
-function groupLatestByQuestion(
-  recordings: Array<{
-    id: string;
+function groupLatestByQuestion<
+  T extends {
     questionId: string;
     attemptNumber: number;
-    question: { order: number; title: string };
-  }>,
-) {
-  const latest = new Map<string, (typeof recordings)[number]>();
+    question: { order: number };
+  },
+>(recordings: T[]) {
+  const latest = new Map<string, T>();
   for (const recording of recordings) {
     const existing = latest.get(recording.questionId);
     if (!existing || recording.attemptNumber > existing.attemptNumber) {
@@ -73,6 +73,12 @@ export default async function NewEntryPage() {
           id: recording.id,
           order: recording.question.order,
           downloadUrl: `/api/recordings/file?recordingId=${recording.id}&download=1`,
+          fileName: recordingDownloadFilename(
+            doctor.doctorCode,
+            recording.question.order,
+            recording.asset.mimeType,
+            recording.asset.storageUrl,
+          ),
         })),
       };
     });

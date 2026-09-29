@@ -26,6 +26,7 @@ export type NewEntryDoctorRow = {
     id: string;
     order: number;
     downloadUrl: string;
+    fileName: string;
   }>;
 };
 
@@ -94,11 +95,11 @@ function RecordingsSection({ doctor }: { doctor: NewEntryDoctorRow }) {
         return (
           <a
             className="inline-flex w-fit items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50"
-            download
+            download={recording.fileName}
             href={recording.downloadUrl}
             key={recording.id}
           >
-            Q{order}. Download
+            Q{order}. {recording.fileName.endsWith(".mp4") ? "mp4" : "webm"}
           </a>
         );
       })}

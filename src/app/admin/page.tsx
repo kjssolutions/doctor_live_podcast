@@ -6,18 +6,18 @@ import { AdminStats } from "@/components/admin-stats";
 import { approvedForAdminWhere } from "@/lib/doctor-access";
 import { getDisplayPostProductionStatus } from "@/lib/post-production";
 import { prisma } from "@/lib/prisma";
+import { recordingDownloadFilename } from "@/lib/storage-keys";
 
 export const dynamic = "force-dynamic";
 
-function groupLatestByQuestion(
-  recordings: Array<{
-    id: string;
+function groupLatestByQuestion<
+  T extends {
     questionId: string;
     attemptNumber: number;
-    question: { order: number; title: string };
-  }>,
-) {
-  const latest = new Map<string, (typeof recordings)[number]>();
+    question: { order: number };
+  },
+>(recordings: T[]) {
+  const latest = new Map<string, T>();
   for (const recording of recordings) {
     const existing = latest.get(recording.questionId);
     if (!existing || recording.attemptNumber > existing.attemptNumber) {
@@ -67,6 +67,12 @@ export default async function AdminPage() {
         order: recording.question.order,
         fileUrl: `/api/recordings/file?recordingId=${recording.id}`,
         downloadUrl: `/api/recordings/file?recordingId=${recording.id}&download=1`,
+        fileName: recordingDownloadFilename(
+          doctor.doctorCode,
+          recording.question.order,
+          recording.asset.mimeType,
+          recording.asset.storageUrl,
+        ),
       })),
       editedFileUrl: doctor.editedVideo?.storageUrl ?? "",
       editedDownloadUrl: doctor.editedVideo?.storageUrl ?? "",

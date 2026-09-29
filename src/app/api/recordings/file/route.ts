@@ -12,13 +12,10 @@ import {
 } from "@/lib/doctor-access";
 import { ADMIN_OPEN_WITHOUT_LOGIN, resolveAdminUser } from "@/lib/open-admin";
 import { prisma } from "@/lib/prisma";
+import { recordingDownloadFilename, recordingVideoDownloadMeta } from "@/lib/storage-keys";
 import { getSpacesClient, getSpacesConfig, parseStorageKey } from "@/lib/spaces";
 
 export const runtime = "nodejs";
-
-function safeFilename(input: string) {
-  return input.replace(/[^a-zA-Z0-9._-]+/g, "_");
-}
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -71,19 +68,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   }
 
-  const doctorLabel = recording.doctor.doctorName ?? recording.doctor.doctorCode;
-  const filename = safeFilename(
-    `${doctorLabel}-q${recording.question.order}-${recording.question.title}-attempt${recording.attemptNumber}.${recording.asset.mimeType.includes("mp4") ? "mp4" : "webm"}`,
+  const mimeType = recording.asset.mimeType || "";
+  const { contentType } = recordingVideoDownloadMeta(
+    mimeType,
+    recording.asset.storageUrl,
+  );
+  const filename = recordingDownloadFilename(
+    recording.doctor.doctorCode,
+    recording.question.order,
+    mimeType,
+    recording.asset.storageUrl,
   );
 
   const headers = new Headers();
-  headers.set("Content-Type", recording.asset.mimeType || "application/octet-stream");
+  headers.set("Content-Type", contentType);
   headers.set("Cache-Control", "private, max-age=0, must-revalidate");
-  if (download) {
-    headers.set("Content-Disposition", `attachment; filename="${filename}"`);
-  } else {
-    headers.set("Content-Disposition", `inline; filename="${filename}"`);
-  }
+  headers.set(
+    "Content-Disposition",
+    `${download ? "attachment" : "inline"}; filename="${filename}"`,
+  );
 
   headers.set("Accept-Ranges", "bytes");
 

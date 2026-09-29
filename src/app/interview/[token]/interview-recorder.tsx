@@ -52,7 +52,8 @@ type Doctor = {
 };
 
 type UploadState = "idle" | "uploading" | "done" | "error";
-type StepPhase = "watch" | "record" | "review";
+/** capture = live question + doctor camera; review = doctor answer preview */
+type StepPhase = "capture" | "review";
 
 function findFirstPendingQuestionIndex(
   questions: Question[],
@@ -64,10 +65,11 @@ function findFirstPendingQuestionIndex(
 
 function getSupportedVideoMimeType() {
   const options = [
+    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4",
     "video/webm;codecs=vp8,opus",
     "video/webm;codecs=vp9,opus",
     "video/webm",
-    "video/mp4",
   ];
 
   return options.find((option) => MediaRecorder.isTypeSupported(option)) ?? "";
@@ -118,12 +120,19 @@ export function InterviewRecorder({
   const blurEnabledRef = useRef(false);
   const [acceptedQuestionIds, setAcceptedQuestionIds] =
     useState(initialAccepted);
-  const [stepPhase, setStepPhase] = useState<StepPhase>("watch");
+  const [stepPhase, setStepPhase] = useState<StepPhase>("capture");
+  /** Bumped by Retake so capture can restart even when already on "capture". */
+  const [captureRestartKey, setCaptureRestartKey] = useState(0);
+  /** True while the question video is auto-playing (once per question). */
+  const [questionPlaying, setQuestionPlaying] = useState(true);
+  const [questionNeedsTap, setQuestionNeedsTap] = useState(false);
 
   // Single video element for both live camera and recorded playback.
   // We swap between srcObject (live) and src (recorded) imperatively so React
   // never unmounts/remounts the element — that prevented playback from working.
   const videoRef = useRef<HTMLVideoElement>(null);
+  const questionVideoRef = useRef<HTMLVideoElement>(null);
+  const questionEndedHandledRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const recordingMimeTypeRef = useRef("");
@@ -132,8 +141,15 @@ export function InterviewRecorder({
   const canvasVideoRef = useRef<HTMLVideoElement | null>(null);
   const canvasAnimationRef = useRef<number | null>(null);
   const stopDrawRef = useRef<(() => void) | null>(null);
+  const pendingRecordStreamRef = useRef<MediaStream | null>(null);
+  /** Audio track actually sent to MediaRecorder (mic clone on the canvas stream). */
+  const recordingAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   /** Bumps on every camera refresh so overlapping async rebuilds don't clobber each other. */
   const cameraGenRef = useRef(0);
+  /** Bumps when a capture session should be abandoned (stop / question change). */
+  const captureGenRef = useRef(0);
+  /** After Stop, do not auto-restart capture until Retake or next question. */
+  const userStoppedRef = useRef(false);
   /** Prevents double-tap on Preview / Retake while async camera work runs. */
   const actionLockRef = useRef(false);
   // Stable ref so the unmount-only cleanup can stop tracks without stream in deps.
@@ -144,6 +160,30 @@ export function InterviewRecorder({
   useEffect(() => {
     blurEnabledRef.current = blurEnabled;
   }, [blurEnabled]);
+
+  function setAnswerMicEnabled(enabled: boolean) {
+    const tracks = new Set<MediaStreamTrack>();
+    if (recordingAudioTrackRef.current) {
+      tracks.add(recordingAudioTrackRef.current);
+    }
+    captureStreamRef.current?.getAudioTracks().forEach((track) => tracks.add(track));
+    rawStreamRef.current?.getAudioTracks().forEach((track) => tracks.add(track));
+    streamRef.current?.getAudioTracks().forEach((track) => tracks.add(track));
+    tracks.forEach((track) => {
+      if (track.readyState === "live") {
+        track.enabled = enabled;
+      }
+    });
+  }
+
+  function ensureDoctorMicLive(media: MediaStream | null | undefined) {
+    media?.getAudioTracks().forEach((track) => {
+      if (track.readyState === "live") {
+        track.enabled = true;
+      }
+    });
+    setAnswerMicEnabled(true);
+  }
 
   function stopTracks(media: MediaStream | null | undefined) {
     media?.getTracks().forEach((track) => {
@@ -202,6 +242,18 @@ export function InterviewRecorder({
     video.playsInline = true;
     video.autoplay = true;
     safePlay(video);
+  }
+
+  /** Bottom UI shows doctor camera; the canvas stream records doctor only. */
+  function attachDoctorLivePreview() {
+    const raw = rawStreamRef.current;
+    if (raw) {
+      attachLiveToVideo(raw);
+      return;
+    }
+    if (streamRef.current) {
+      attachLiveToVideo(streamRef.current);
+    }
   }
 
   function attachPreviewToVideo(url: string, autoplay: boolean) {
@@ -271,6 +323,18 @@ export function InterviewRecorder({
     let rafId: number | null = null;
     let stopped = false;
 
+    const portraitStream = canvas.captureStream(CAPTURE_FPS);
+    const canvasTrack = portraitStream.getVideoTracks()[0] as MediaStreamTrack & {
+      requestFrame?: () => void;
+    };
+    const audioTrack = sourceStream.getAudioTracks()[0];
+    if (audioTrack && audioTrack.readyState === "live") {
+      audioTrack.enabled = true;
+      const cloned = audioTrack.clone();
+      cloned.enabled = true;
+      portraitStream.addTrack(cloned);
+    }
+
     const drawFrame = (now: number) => {
       if (stopped) return;
       rafId = requestAnimationFrame(drawFrame);
@@ -278,7 +342,6 @@ export function InterviewRecorder({
         return;
       }
       lastDrawMs = now;
-      // Keep source playing — mobile browsers sometimes pause background videos.
       if (sourceVideo.paused) {
         safePlay(sourceVideo);
       }
@@ -289,15 +352,10 @@ export function InterviewRecorder({
         destHeight: PORTRAIT_HEIGHT,
         blurEnabled: blurEnabledRef.current && blurSession.isReady(),
       });
+      canvasTrack.requestFrame?.();
     };
 
     rafId = requestAnimationFrame(drawFrame);
-
-    const portraitStream = canvas.captureStream(CAPTURE_FPS);
-    const audioTrack = sourceStream.getAudioTracks()[0];
-    if (audioTrack && audioTrack.readyState === "live") {
-      portraitStream.addTrack(audioTrack.clone());
-    }
 
     return {
       stream: portraitStream,
@@ -400,13 +458,41 @@ export function InterviewRecorder({
     [acceptedQuestionIds.size, questions.length],
   );
 
-  // Each question starts with watch → record → review.
+  function discardActiveRecorder() {
+    const recorder = recorderRef.current;
+    if (!recorder) {
+      return;
+    }
+    // Detach handlers so a late onstop cannot open Review with a stale blob.
+    recorder.ondataavailable = null;
+    recorder.onstop = null;
+    recorder.onerror = null;
+    if (recorder.state !== "inactive") {
+      try {
+        recorder.stop();
+      } catch {
+        // ignore
+      }
+    }
+    recorderRef.current = null;
+  }
+
+  // Reset per-question state when moving to another question.
   useEffect(() => {
-    setStepPhase("watch");
+    captureGenRef.current += 1;
+    userStoppedRef.current = false;
+    discardActiveRecorder();
+    chunksRef.current = [];
+    pendingRecordStreamRef.current = null;
+    setStepPhase("capture");
+    setQuestionPlaying(true);
+    setQuestionNeedsTap(false);
+    questionEndedHandledRef.current = false;
     setRecordedBlob(null);
     setUploadState("idle");
     setError(null);
     setIsProcessing(false);
+    setIsRecording(false);
     setIsPreviewRequested(false);
     setRecordedDuration(0);
     setRecordingSeconds(0);
@@ -416,10 +502,9 @@ export function InterviewRecorder({
     }
   }, [currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Drive the single video element carefully — never pause()+play() thrash on
-  // an already-attached live stream (causes AbortError and can freeze capture).
+  // Drive doctor preview / review playback on the single video element.
   useEffect(() => {
-    if (stepPhase !== "record" && stepPhase !== "review") {
+    if (stepPhase !== "capture" && stepPhase !== "review") {
       return;
     }
 
@@ -436,20 +521,14 @@ export function InterviewRecorder({
     video.addEventListener("ended", onEnded);
 
     if (stepPhase === "review" && previewUrl) {
-      // Only (re)load when the URL changes; Preview button handles play.
       if (video.getAttribute("src") !== previewUrl) {
         attachPreviewToVideo(previewUrl, false);
       }
       if (isPreviewRequested && video.paused) {
         safePlay(video);
       }
-    } else if (stepPhase === "record" && stream && !isRecording) {
-      const live =
-        stream.getTracks().length > 0 &&
-        stream.getTracks().every((track) => track.readyState === "live");
-      if (live) {
-        attachLiveToVideo(stream);
-      }
+    } else if (stepPhase === "capture" && !isRecording && !isProcessing) {
+      attachDoctorLivePreview();
     }
 
     return () => {
@@ -457,12 +536,13 @@ export function InterviewRecorder({
       video.removeEventListener("pause", onPause);
       video.removeEventListener("ended", onEnded);
     };
-  }, [stream, previewUrl, isPreviewRequested, stepPhase, isRecording]);
+  }, [stream, previewUrl, isPreviewRequested, stepPhase, isRecording, isProcessing]);
 
   // Stop camera tracks ONLY on unmount — never during retake or question changes.
   useEffect(() => {
     return () => {
       cameraGenRef.current += 1;
+      captureGenRef.current += 1;
       stopPortraitPipeline();
       disposeBackgroundBlurSession();
       stopTracks(rawStreamRef.current);
@@ -471,26 +551,124 @@ export function InterviewRecorder({
     };
   }, []);
 
-  // Warm up live preview as soon as the doctor enters the record step.
+  // Each question: start doctor recording, play question on the live top screen.
+  // Do NOT depend on isProcessing / recordedBlob — Stop used to flip those and
+  // restart recording forever (felt like Stop / Preview / Next were broken).
   useEffect(() => {
-    if (stepPhase !== "record" || isRecording || recordedBlob || isProcessing) {
+    if (!started || stepPhase !== "capture") {
       return;
     }
+    if (userStoppedRef.current) {
+      return;
+    }
+
+    const gen = ++captureGenRef.current;
     let cancelled = false;
+
+    const isStale = () =>
+      cancelled || gen !== captureGenRef.current || userStoppedRef.current;
+
     void (async () => {
+      setError(null);
       setIsPreparingCamera(true);
+      questionEndedHandledRef.current = false;
+
       const next = await refreshPortraitStream();
-      if (!cancelled && next) {
-        attachLiveToVideo(next);
-      }
-      if (!cancelled) {
+      if (isStale()) {
         setIsPreparingCamera(false);
+        return;
+      }
+
+      if (!next) {
+        setIsPreparingCamera(false);
+        return;
+      }
+
+      attachDoctorLivePreview();
+      pendingRecordStreamRef.current = next;
+      setIsPreparingCamera(false);
+
+      // Start doctor-only recording as soon as the question begins (video + mic).
+      const startedOk = await beginDoctorRecording(next);
+      if (isStale() || !startedOk) return;
+
+      const qVideo = questionVideoRef.current;
+      if (!qVideo || !currentQuestion) {
+        return;
+      }
+
+      const src = getQuestionVideoSrc(currentQuestion.order);
+      if (qVideo.getAttribute("src") !== src) {
+        qVideo.src = src;
+      }
+      try {
+        qVideo.currentTime = 0;
+      } catch {
+        // ignore
+      }
+
+      setQuestionPlaying(true);
+      setQuestionNeedsTap(false);
+      try {
+        await qVideo.play();
+      } catch {
+        if (!isStale()) {
+          setQuestionNeedsTap(true);
+        }
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [stepPhase, isRecording, recordedBlob, isProcessing, currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [started, stepPhase, currentIndex, captureRestartKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function onQuestionVideoEnded() {
+    if (questionEndedHandledRef.current) {
+      return;
+    }
+    questionEndedHandledRef.current = true;
+    setQuestionPlaying(false);
+    setQuestionNeedsTap(false);
+    // Keep doctor mic live for the answer portion.
+    ensureDoctorMicLive(rawStreamRef.current);
+    ensureDoctorMicLive(captureStreamRef.current);
+    const video = questionVideoRef.current;
+    if (video) {
+      try {
+        video.pause();
+        if (Number.isFinite(video.duration) && video.duration > 0) {
+          video.currentTime = Math.max(0, video.duration - 0.08);
+        }
+      } catch {
+        // Keep the last question frame on the live top screen.
+      }
+    }
+  }
+
+  async function playQuestionFromTap() {
+    const video = questionVideoRef.current;
+    if (!video) return;
+    setQuestionNeedsTap(false);
+    questionEndedHandledRef.current = false;
+
+    const current =
+      pendingRecordStreamRef.current ??
+      captureStreamRef.current ??
+      streamRef.current;
+    if (current && !recorderRef.current && !userStoppedRef.current) {
+      const startedOk = await beginDoctorRecording(current);
+      if (!startedOk) return;
+    }
+
+    try {
+      await video.play();
+    } catch {
+      setQuestionNeedsTap(true);
+      return;
+    }
+    setQuestionPlaying(true);
+  }
 
   async function startInterview() {
     setError(null);
@@ -564,7 +742,11 @@ export function InterviewRecorder({
             },
             aspectRatio: { ideal: 9 / 16 },
           },
-          audio: true,
+          audio: {
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true },
+          },
         });
         if (gen !== cameraGenRef.current) {
           stopTracks(mediaStream);
@@ -658,43 +840,27 @@ export function InterviewRecorder({
     }
   }
 
-  async function startRecording() {
-    if (!currentQuestion || actionLockRef.current) {
-      return;
+  async function beginDoctorRecording(currentStream: MediaStream) {
+    if (actionLockRef.current || recorderRef.current) {
+      return false;
+    }
+    if (userStoppedRef.current) {
+      return false;
     }
     actionLockRef.current = true;
 
     try {
       setError(null);
-      setIsPreparingCamera(true);
-
-      // Prefer an already-live warm preview; only rebuild if tracks died.
-      let currentStream = streamRef.current;
-      const live =
-        currentStream &&
-        currentStream.getTracks().length > 0 &&
-        currentStream.getTracks().every((t) => t.readyState === "live") &&
-        stopDrawRef.current;
-
-      if (!live) {
-        currentStream = await refreshPortraitStream();
-      }
-      setIsPreparingCamera(false);
-
-      if (!currentStream) {
-        return;
-      }
 
       const liveTracks = currentStream.getTracks();
       if (
         liveTracks.length === 0 ||
         liveTracks.some((t) => t.readyState === "ended")
       ) {
-        setError("Camera stream was disconnected. Tap Start recording again.");
-        return;
+        setError("Camera stream was disconnected. Please reload and try again.");
+        return false;
       }
 
-      // Keep source video playing for the whole recording (face freeze = source paused).
       if (canvasVideoRef.current?.paused) {
         safePlay(canvasVideoRef.current);
       }
@@ -702,17 +868,66 @@ export function InterviewRecorder({
       setIsProcessing(false);
       setIsPreviewRequested(false);
       setRecordedBlob(null);
-
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
         setPreviewUrl(null);
       }
 
-      attachLiveToVideo(currentStream);
+      attachDoctorLivePreview();
+
+      // Prefer a fresh clone of the live mic so voice is always in the file.
+      const rawMic =
+        rawStreamRef.current?.getAudioTracks().find((t) => t.readyState === "live") ??
+        null;
+      if (rawMic) {
+        rawMic.enabled = true;
+      }
+      const streamMic =
+        currentStream.getAudioTracks().find((t) => t.readyState === "live") ??
+        captureStreamRef.current
+          ?.getAudioTracks()
+          .find((t) => t.readyState === "live") ??
+        null;
+
+      let audioTrack: MediaStreamTrack | null = null;
+      if (rawMic) {
+        audioTrack = rawMic.clone();
+        audioTrack.enabled = true;
+      } else if (streamMic) {
+        streamMic.enabled = true;
+        audioTrack = streamMic;
+      }
+
+      recordingAudioTrackRef.current = audioTrack;
+      if (!audioTrack) {
+        setError(
+          "Microphone is not available. Allow mic access and tap Record again.",
+        );
+        return false;
+      }
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+      if (userStoppedRef.current) {
+        return false;
+      }
 
       const mimeType = getSupportedVideoMimeType();
       recordingMimeTypeRef.current = mimeType;
       chunksRef.current = [];
+
+      // Doctor screen only (canvas video) + doctor mic (always on).
+      const recordStream = new MediaStream();
+      const videoTrack = currentStream.getVideoTracks()[0];
+      if (!videoTrack || videoTrack.readyState !== "live") {
+        setError("Camera stream was disconnected. Please reload and try again.");
+        return false;
+      }
+      recordStream.addTrack(videoTrack);
+      recordStream.addTrack(audioTrack);
 
       let recorder: MediaRecorder;
       try {
@@ -723,14 +938,14 @@ export function InterviewRecorder({
         if (isAndroidDevice()) {
           recorderOptions.videoBitsPerSecond = ANDROID_VIDEO_BITS_PER_SECOND;
         }
-        recorder = new MediaRecorder(currentStream, recorderOptions);
+        recorder = new MediaRecorder(recordStream, recorderOptions);
       } catch (err) {
         setError(
           err instanceof Error
             ? `Could not start recorder: ${err.message}`
             : "Could not start video recorder. Please reload and try again.",
         );
-        return;
+        return false;
       }
 
       recorder.ondataavailable = (event) => {
@@ -740,61 +955,109 @@ export function InterviewRecorder({
       };
 
       recorder.onerror = () => {
-        setError("Recording failed unexpectedly. Please stop and try again.");
+        recorderRef.current = null;
+        userStoppedRef.current = true;
+        setError("Recording failed unexpectedly. Please try again.");
         setIsRecording(false);
         setIsProcessing(false);
       };
 
       recorder.onstop = () => {
-        const blobType =
-          recordingMimeTypeRef.current || recorder.mimeType || "video/webm";
-        const blob = new Blob(chunksRef.current, { type: blobType });
-
-        setIsProcessing(false);
-
-        if (blob.size === 0) {
-          setError(
-            "No video was captured. Record for at least a few seconds, then stop.",
-          );
-          setRecordedBlob(null);
-          setPreviewUrl(null);
-          return;
-        }
-
-        setRecordedDuration(recordingSecondsRef.current);
-        setRecordedBlob(blob);
-        setIsPreviewRequested(false);
-        setPreviewUrl(URL.createObjectURL(blob));
-        setStepPhase("review");
+        recorderRef.current = null;
+        finalizeRecordingFromChunks(recorder.mimeType);
       };
 
       recorderRef.current = recorder;
       try {
-        recorder.start(1000);
+        recorder.start(250);
       } catch (err) {
+        recorderRef.current = null;
         setError(
           err instanceof Error
             ? `Failed to start recording: ${err.message}`
             : "Failed to start recording. Please reload and try again.",
         );
-        return;
+        return false;
       }
+
       setIsRecording(true);
+      ensureDoctorMicLive(rawStreamRef.current);
+      ensureDoctorMicLive(recordStream);
+      return true;
     } finally {
       actionLockRef.current = false;
-      setIsPreparingCamera(false);
     }
   }
 
-  function stopRecording() {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state === "inactive") {
+  function finalizeRecordingFromChunks(recorderMimeType?: string) {
+    const blobType =
+      recordingMimeTypeRef.current || recorderMimeType || "video/webm";
+    const blob = new Blob(chunksRef.current, { type: blobType });
+
+    setIsRecording(false);
+    setIsProcessing(false);
+
+    if (blob.size === 0) {
+      setError(
+        "No video was captured. Keep answering for a few seconds, then tap Stop again (or Retake).",
+      );
+      setRecordedBlob(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
       return;
     }
 
-    recorder.stop();
+    setRecordedDuration(recordingSecondsRef.current);
+    setRecordedBlob(blob);
+    setIsPreviewRequested(false);
+    const url = URL.createObjectURL(blob);
+    setPreviewUrl(url);
+    setStepPhase("review");
+    setError(null);
+    setAnswerMicEnabled(true);
+  }
+
+  function stopRecording() {
+    // Block session effect from auto-starting again after Stop.
+    userStoppedRef.current = true;
+    captureGenRef.current += 1;
+
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      setIsRecording(false);
+      if (chunksRef.current.length > 0) {
+        finalizeRecordingFromChunks();
+        return;
+      }
+      setIsProcessing(false);
+      setError("Recording was not active. Tap Retake to record again.");
+      return;
+    }
+
     setIsRecording(false);
-    setIsProcessing(true); // hold UI until onstop fires
+    setIsProcessing(true);
+
+    try {
+      if (recorder.state === "recording") {
+        recorder.requestData();
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      recorder.stop();
+    } catch {
+      recorderRef.current = null;
+      if (chunksRef.current.length > 0) {
+        finalizeRecordingFromChunks();
+      } else {
+        setIsProcessing(false);
+        setError("Could not stop recording. Please tap Retake and try again.");
+      }
+    }
   }
 
   function previewRecording() {
@@ -816,8 +1079,9 @@ export function InterviewRecorder({
 
   function retake() {
     if (actionLockRef.current || isPreparingCamera) return;
-    // Stop any in-progress preview playback, discard clip, return to record.
-    // Entering "record" triggers warm-up which rebuilds a fresh live preview.
+    discardActiveRecorder();
+    userStoppedRef.current = false;
+    chunksRef.current = [];
     const video = videoRef.current;
     if (video) {
       video.pause();
@@ -830,6 +1094,7 @@ export function InterviewRecorder({
     setUploadState("idle");
     setError(null);
     setIsProcessing(false);
+    setIsRecording(false);
     setIsPreviewRequested(false);
     setIsPlaying(false);
     setRecordedDuration(0);
@@ -838,11 +1103,11 @@ export function InterviewRecorder({
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     }
-    setStepPhase("record");
-  }
-
-  function replayQuestion() {
-    setStepPhase("watch");
+    questionEndedHandledRef.current = false;
+    setQuestionNeedsTap(false);
+    setQuestionPlaying(true);
+    setStepPhase("capture");
+    setCaptureRestartKey((key) => key + 1);
   }
 
   async function acceptAnswer() {
@@ -916,7 +1181,7 @@ export function InterviewRecorder({
       }
 
       setCurrentIndex(findFirstPendingQuestionIndex(questions, nextAccepted));
-      // currentIndex effect sets stepPhase back to "watch".
+      // currentIndex effect resets to capture + question auto-play.
     } catch (uploadError) {
       setUploadState("error");
       setError(
@@ -950,7 +1215,7 @@ export function InterviewRecorder({
           <p className="mt-4 text-base leading-7 text-slate-600">
             {hasPartialProgress
               ? `You already submitted ${initialAccepted.size} of ${questions.length} answers. Continue from question ${currentIndex + 1} — only pending questions remain.`
-              : "You will hear each podcast question, then record your answer on video. You can replay and retake before submitting."}
+              : "You will see the question on top and yourself on the bottom. Recording starts with the question and saves only your screen and voice. Stop when you finish, then preview."}
           </p>
 
           <div className="mx-auto mt-6 w-full max-w-lg text-left">
@@ -1028,10 +1293,10 @@ export function InterviewRecorder({
     );
   }
 
-  const portraitFrameClass =
-    "relative mx-auto w-full max-w-[min(100%,22rem)] sm:max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-black shadow-lg";
+  const splitPaneClass =
+    "relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-black shadow-sm";
   const showCameraPlaceholder =
-    stepPhase === "record" &&
+    stepPhase === "capture" &&
     !isRecording &&
     !isProcessing &&
     (isPreparingCamera ||
@@ -1039,31 +1304,29 @@ export function InterviewRecorder({
       stream.getTracks().some((track) => track.readyState !== "live"));
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-3 pb-[calc(9rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-6">
-      <header className="mb-4 sm:mb-5">
-        <div className="flex items-start justify-between gap-3 sm:gap-4">
+    <main className="mx-auto flex h-[100dvh] w-full max-w-lg flex-col px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4">
+      <header className="mb-2 shrink-0 sm:mb-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 sm:text-xs">
+            <p className="text-[11px] font-semibold tracking-[0.2em] text-slate-500 uppercase sm:text-xs">
               Question {currentIndex + 1} of {questions.length}
             </p>
-            <h1 className="mt-1 truncate text-xl font-bold text-slate-900 sm:text-2xl">
+            <h1 className="mt-0.5 truncate text-lg font-bold text-slate-900 sm:text-xl">
               {currentQuestion.title}
             </h1>
           </div>
-          <div className="w-20 shrink-0 rounded-full bg-slate-200 p-1 sm:w-32">
+          <div className="w-16 shrink-0 rounded-full bg-slate-200 p-1 sm:w-28">
             <div
               className="h-2 rounded-full bg-slate-900 transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
-        <div className="mt-3 flex gap-1.5 sm:mt-4 sm:gap-2">
-          {(["watch", "record", "review"] as StepPhase[]).map((phase, index) => {
-            const labels = ["Watch", "Record", "Review"];
+        <div className="mt-2 flex gap-1.5 sm:gap-2">
+          {(["capture", "review"] as StepPhase[]).map((phase, index) => {
+            const labels = ["Record", "Review"];
             const isActive = stepPhase === phase;
-            const isDone =
-              (phase === "watch" && (stepPhase === "record" || stepPhase === "review")) ||
-              (phase === "record" && stepPhase === "review");
+            const isDone = phase === "capture" && stepPhase === "review";
             return (
               <div
                 className={`flex-1 rounded-full px-1.5 py-1.5 text-center text-[10px] font-semibold sm:px-2 sm:text-xs ${
@@ -1082,140 +1345,189 @@ export function InterviewRecorder({
         </div>
       </header>
 
-      <section className="flex-1">
-        {stepPhase === "watch" ? (
-          <div className="space-y-4 sm:space-y-5">
-            <div
-              className={`${portraitFrameClass} max-w-[min(100%,22rem,calc(62dvh*9/16))]`}
-            >
-              <video
-                className="aspect-[9/16] w-full object-cover"
-                controls
-                playsInline
-                preload="auto"
-                src={getQuestionVideoSrc(currentQuestion.order)}
-              />
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-sm font-medium text-slate-500">Question</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700 sm:text-base sm:leading-7">
-                {currentQuestion.prompt}
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        {stepPhase === "record" || stepPhase === "review" ? (
-          <div className={portraitFrameClass}>
-            {/* Keep <video> mounted so retake/preview never lose the element ref. */}
+      <section className="flex min-h-0 flex-1 flex-col gap-2">
+        {stepPhase === "capture" ? (
+          <div className={`${splitPaneClass} flex-[1_1_50%]`}>
             <video
-              autoPlay
-              className="aspect-[9/16] w-full bg-black object-cover"
+              className="h-full w-full bg-black object-contain object-top"
+              muted={false}
+              onEnded={onQuestionVideoEnded}
               playsInline
-              ref={videoRef}
+              preload="auto"
+              ref={questionVideoRef}
+              src={getQuestionVideoSrc(currentQuestion.order)}
             />
-
-            {showCameraPlaceholder ? (
-              <div className="absolute inset-0 flex aspect-[9/16] w-full items-center justify-center bg-slate-900/95 p-6 text-center text-slate-200">
-                <p className="max-w-[16rem] text-sm leading-6">
-                  {isPreparingCamera ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Starting camera…
-                    </span>
-                  ) : (
-                    <>
-                      Position yourself in frame. Tap{" "}
-                      <span className="font-semibold text-white">Start recording</span>{" "}
-                      when you are ready.
-                    </>
-                  )}
-                </p>
+            <div className="absolute top-2 left-2 rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-white uppercase">
+              Question
+            </div>
+            {questionPlaying ? (
+              <div className="absolute right-2 bottom-2 rounded-full bg-sky-600/90 px-2.5 py-1 text-[10px] font-semibold text-white">
+                Playing…
               </div>
-            ) : null}
-
-            {isRecording ? (
-              <div className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full bg-rose-500/90 px-3 py-1.5 text-xs font-semibold text-white sm:left-4 sm:top-4">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
-                {formatSeconds(recordingSeconds)}
+            ) : (
+              <div className="absolute right-2 bottom-2 rounded-full bg-slate-700/90 px-2.5 py-1 text-[10px] font-semibold text-white">
+                Question done
               </div>
-            ) : null}
-
-            {stepPhase === "record" && stream && !isProcessing && !isPreparingCamera ? (
+            )}
+            {questionNeedsTap ? (
               <button
-                aria-label={blurEnabled ? "Turn off background blur" : "Blur background"}
-                aria-pressed={blurEnabled}
-                className={`absolute right-3 top-3 inline-flex touch-manipulation items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white transition sm:right-4 sm:top-4 ${
-                  blurEnabled
-                    ? "bg-slate-900/95 ring-2 ring-white/40"
-                    : "bg-black/55 hover:bg-black/70"
-                }`}
-                disabled={blurLoading}
-                onClick={() => void toggleBlurBackground()}
+                className="absolute inset-0 flex items-center justify-center bg-black/45"
+                onClick={playQuestionFromTap}
                 type="button"
               >
-                {blurLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Aperture className="h-3.5 w-3.5" />
-                )}
-                {blurLoading ? "Preparing…" : blurEnabled ? "Blur on" : "Blur"}
-              </button>
-            ) : null}
-
-            {stepPhase === "review" && previewUrl && recordedDuration > 0 ? (
-              <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white sm:left-4 sm:top-4">
-                <Timer className="h-3 w-3" />
-                {formatSeconds(recordedDuration)}
-              </div>
-            ) : null}
-
-            {stepPhase === "review" && previewUrl && !isProcessing ? (
-              <button
-                aria-label={isPlaying ? "Pause" : "Play preview"}
-                className="absolute inset-0 flex items-center justify-center bg-black/10"
-                onClick={() => {
-                  if (!isPreviewRequested) {
-                    previewRecording();
-                    return;
-                  }
-                  const video = videoRef.current;
-                  if (!video) return;
-                  if (video.paused) {
-                    void video.play();
-                  } else {
-                    video.pause();
-                  }
-                }}
-                type="button"
-              >
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm sm:h-16 sm:w-16">
-                  {isPlaying ? (
-                    <Pause className="h-6 w-6 text-white sm:h-7 sm:w-7" />
-                  ) : (
-                    <Play className="h-6 w-6 translate-x-0.5 text-white sm:h-7 sm:w-7" />
-                  )}
+                <span className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900">
+                  Tap to play question
                 </span>
               </button>
             ) : null}
-
-            {isProcessing ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                <Loader2 className="h-8 w-8 animate-spin text-white" />
-                <span className="ml-2 text-sm text-white">Processing…</span>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
+        {/* Doctor live camera (capture) / answer preview (review) */}
+        <div
+          className={`${splitPaneClass} ${
+            stepPhase === "review"
+              ? "mx-auto w-full max-w-sm flex-[1_1_auto]"
+              : "flex-[1_1_50%]"
+          }`}
+        >
+          <video
+            autoPlay
+            className={`w-full bg-black ${
+              stepPhase === "review"
+                ? "aspect-[9/16] h-auto object-contain"
+                : "h-full object-cover"
+            }`}
+            muted={false}
+            playsInline
+            ref={videoRef}
+          />
+
+          {stepPhase === "review" ? (
+            <div className="absolute top-2 right-2 rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-white uppercase">
+              Your answer
+            </div>
+          ) : null}
+
+          {stepPhase === "capture" ? (
+            <div className="absolute top-2 left-2 rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-white uppercase">
+              Your answer
+            </div>
+          ) : null}
+
+          {showCameraPlaceholder ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 p-4 text-center text-slate-200">
+              <p className="max-w-[14rem] text-xs leading-5 sm:text-sm">
+                {isPreparingCamera ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Starting camera…
+                  </span>
+                ) : (
+                  "Position yourself — only your answer is recorded."
+                )}
+              </p>
+            </div>
+          ) : null}
+
+          {isRecording ? (
+            <div className="absolute top-2 right-2 inline-flex items-center gap-2 rounded-full bg-rose-500/90 px-2.5 py-1 text-[11px] font-semibold text-white">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+              REC {formatSeconds(recordingSeconds)}
+            </div>
+          ) : null}
+
+          {stepPhase === "capture" &&
+          stream &&
+          !isProcessing &&
+          !isPreparingCamera ? (
+            <button
+              aria-label={
+                blurEnabled ? "Turn off background blur" : "Blur background"
+              }
+              aria-pressed={blurEnabled}
+              className={`absolute bottom-2 right-2 inline-flex touch-manipulation items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white transition ${
+                blurEnabled
+                  ? "bg-slate-900/95 ring-2 ring-white/40"
+                  : "bg-black/55 hover:bg-black/70"
+              }`}
+              disabled={blurLoading}
+              onClick={() => void toggleBlurBackground()}
+              type="button"
+            >
+              {blurLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Aperture className="h-3.5 w-3.5" />
+              )}
+              {blurLoading ? "Preparing…" : blurEnabled ? "Blur on" : "Blur"}
+            </button>
+          ) : null}
+
+          {stepPhase === "review" && previewUrl && recordedDuration > 0 ? (
+            <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white">
+              <Timer className="h-3 w-3" />
+              {formatSeconds(recordedDuration)}
+            </div>
+          ) : null}
+
+          {stepPhase === "review" && previewUrl && !isProcessing ? (
+            <button
+              aria-label={isPlaying ? "Pause" : "Play preview"}
+              className="absolute inset-0 flex items-center justify-center bg-black/10"
+              onClick={() => {
+                if (!isPreviewRequested) {
+                  previewRecording();
+                  return;
+                }
+                const video = videoRef.current;
+                if (!video) return;
+                if (video.paused) {
+                  void video.play();
+                } else {
+                  video.pause();
+                }
+              }}
+              type="button"
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+                {isPlaying ? (
+                  <Pause className="h-6 w-6 text-white" />
+                ) : (
+                  <Play className="h-6 w-6 translate-x-0.5 text-white" />
+                )}
+              </span>
+            </button>
+          ) : null}
+
+          {isProcessing ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+              <Loader2 className="h-7 w-7 animate-spin text-white" />
+              <span className="ml-2 text-sm text-white">Processing…</span>
+            </div>
+          ) : null}
+        </div>
+
+        {stepPhase === "capture" ? (
+          <p className="shrink-0 text-center text-[11px] leading-4 text-slate-500 sm:text-xs">
+            {isPreparingCamera
+              ? "Starting camera…"
+              : questionPlaying
+                ? "Recording your screen + voice. Watch the question on top."
+                : isRecording
+                  ? "Speak your answer, then tap Stop."
+                  : "Preparing…"}
+          </p>
+        ) : null}
+
         {stepPhase === "review" && recordedBlob && !isProcessing ? (
-          <p className="mt-3 text-center text-sm text-slate-500 sm:mt-4">
-            Preview your answer, retake if needed, then accept to continue.
+          <p className="shrink-0 text-center text-sm text-slate-500">
+            Preview is your answer only. Retake if needed, then accept.
           </p>
         ) : null}
 
         {error ? (
-          <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-center text-sm text-rose-700 sm:mt-4">
+          <p className="shrink-0 rounded-xl border border-rose-200 bg-rose-50 p-3 text-center text-sm text-rose-700">
             {error}
           </p>
         ) : null}
@@ -1223,49 +1535,16 @@ export function InterviewRecorder({
 
       <div className="interview-footer-safe fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-4 sm:py-4">
         <div className="mx-auto flex max-w-lg flex-col gap-2.5 sm:gap-3">
-          {stepPhase === "watch" ? (
-            <button
-              className="w-full min-h-[52px] touch-manipulation rounded-xl bg-slate-900 px-6 py-3.5 text-base font-semibold text-white hover:bg-slate-800 active:scale-[0.98] sm:py-4 sm:text-lg"
-              onClick={() => setStepPhase("record")}
-              type="button"
-            >
-              Record your answer
-            </button>
+          {stepPhase === "capture" && isPreparingCamera ? (
+            <p className="inline-flex items-center justify-center gap-2 py-2 text-center text-sm font-medium text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Starting your answer recording…
+            </p>
           ) : null}
 
-          {stepPhase === "record" && !isRecording && !isProcessing && !recordedBlob ? (
-            <>
-              <button
-                className="inline-flex w-full min-h-[52px] touch-manipulation items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-base font-semibold text-white hover:bg-slate-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:py-4 sm:text-lg"
-                disabled={isPreparingCamera}
-                onClick={() => void startRecording()}
-                type="button"
-              >
-                {isPreparingCamera ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Starting camera…
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-5 w-5" />
-                    Start recording
-                  </>
-                )}
-              </button>
-              <button
-                className="min-h-[40px] touch-manipulation text-sm font-medium text-slate-500 hover:text-slate-800"
-                onClick={replayQuestion}
-                type="button"
-              >
-                Replay question video
-              </button>
-            </>
-          ) : null}
-
-          {stepPhase === "record" && isRecording ? (
+          {stepPhase === "capture" && isRecording ? (
             <button
-              className="w-full min-h-[52px] touch-manipulation rounded-xl bg-rose-600 px-6 py-3.5 text-base font-semibold text-white hover:bg-rose-500 active:scale-[0.98] sm:py-4 sm:text-lg"
+              className="w-full min-h-[52px] touch-manipulation rounded-xl bg-rose-600 px-6 py-3.5 text-base font-semibold text-white hover:bg-rose-500 active:scale-[0.98]"
               onClick={stopRecording}
               type="button"
             >
@@ -1276,11 +1555,26 @@ export function InterviewRecorder({
             </button>
           ) : null}
 
+          {stepPhase === "capture" &&
+          !isRecording &&
+          !isPreparingCamera &&
+          !isProcessing &&
+          error ? (
+            <button
+              className="inline-flex w-full min-h-[52px] touch-manipulation items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-base font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98]"
+              onClick={retake}
+              type="button"
+            >
+              <RotateCcw className="h-5 w-5" />
+              Record again
+            </button>
+          ) : null}
+
           {stepPhase === "review" && recordedBlob && !isProcessing ? (
             <>
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                 <button
-                  className="inline-flex min-h-[48px] touch-manipulation items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50 sm:px-4"
+                  className="inline-flex min-h-[48px] touch-manipulation items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
                   disabled={uploadState === "uploading"}
                   onClick={previewRecording}
                   type="button"
@@ -1289,7 +1583,7 @@ export function InterviewRecorder({
                   Preview
                 </button>
                 <button
-                  className="inline-flex min-h-[48px] touch-manipulation items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50 sm:px-4"
+                  className="inline-flex min-h-[48px] touch-manipulation items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
                   disabled={uploadState === "uploading" || isPreparingCamera}
                   onClick={retake}
                   type="button"
@@ -1299,7 +1593,7 @@ export function InterviewRecorder({
                 </button>
               </div>
               <button
-                className="inline-flex w-full min-h-[52px] touch-manipulation items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-base font-semibold text-white hover:bg-emerald-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:py-4 sm:text-lg"
+                className="inline-flex w-full min-h-[52px] touch-manipulation items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-base font-semibold text-white hover:bg-emerald-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={uploadState === "uploading"}
                 onClick={() => void acceptAnswer()}
                 type="button"
