@@ -36,6 +36,16 @@ const CAPTURE_FPS = isAndroidDevice() ? 24 : 30;
 const CAMERA_IDEAL_WIDTH = USE_LITE_PORTRAIT ? 1280 : 1920;
 const CAMERA_IDEAL_HEIGHT = USE_LITE_PORTRAIT ? 720 : 1080;
 const ANDROID_VIDEO_BITS_PER_SECOND = 2_500_000;
+// Keeps answer files predictable in size (Safari otherwise records very high bitrates).
+const VIDEO_BITS_PER_SECOND = USE_LITE_PORTRAIT ? 2_500_000 : 3_000_000;
+
+const INSECURE_CONTEXT_ERROR = "insecure-context";
+
+type UploadedRecording = {
+  key: string;
+  mimeType: string;
+  sizeBytes: number;
+};
 
 type Question = {
   id: string;
@@ -244,8 +254,16 @@ export function InterviewRecorder({
     safePlay(video);
   }
 
-  /** Bottom UI shows doctor camera; the canvas stream records doctor only. */
+  /** Bottom UI shows the canvas stream so the doctor sees exactly what is recorded (incl. blur). */
   function attachDoctorLivePreview() {
+    const canvasStream = captureStreamRef.current;
+    const canvasVideoLive = canvasStream
+      ?.getVideoTracks()
+      .some((track) => track.readyState === "live");
+    if (canvasStream && canvasVideoLive) {
+      attachLiveToVideo(canvasStream);
+      return;
+    }
     const raw = rawStreamRef.current;
     if (raw) {
       attachLiveToVideo(raw);
@@ -731,23 +749,7 @@ export function InterviewRecorder({
       if (!forceNew && rawStillLive) {
         mediaStream = existingRaw;
       } else {
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: CAMERA_IDEAL_WIDTH },
-            height: { ideal: CAMERA_IDEAL_HEIGHT },
-            frameRate: {
-              ideal: CAPTURE_FPS,
-              max: CAPTURE_FPS,
-            },
-            aspectRatio: { ideal: 9 / 16 },
-          },
-          audio: {
-            echoCancellation: { ideal: true },
-            noiseSuppression: { ideal: true },
-            autoGainControl: { ideal: true },
-          },
-        });
+        mediaStream = await requestCameraStream();
         if (gen !== cameraGenRef.current) {
           stopTracks(mediaStream);
           return null;
@@ -790,19 +792,62 @@ export function InterviewRecorder({
         created.sourceVideo.srcObject = null;
         stopTracks(created.stream);
       }
-      const name = cause instanceof DOMException ? cause.name : "";
-      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      const name =
+        cause instanceof DOMException || cause instanceof Error ? cause.name : "";
+      if (cause instanceof Error && cause.message === INSECURE_CONTEXT_ERROR) {
+        setError(
+          "Camera needs a secure link. Open this page with https:// (or http://localhost on this computer), then tap Start recording again.",
+        );
+      } else if (name === "NotAllowedError" || name === "PermissionDeniedError") {
         setError(
           "Please allow camera and microphone access in your browser settings, then tap Start recording again.",
         );
-      } else if (name === "NotFoundError") {
-        setError("No camera found on this device.");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        setError("No camera or microphone found on this device.");
+      } else if (name === "NotReadableError" || name === "TrackStartError") {
+        setError(
+          "Camera is busy. Close other apps or browser tabs using the camera (Zoom, Teams, Camera app, another interview tab), then tap Start recording again.",
+        );
       } else {
         setError(
-          "Could not start camera. Use HTTPS on mobile or check browser permissions.",
+          `Could not start camera${name ? ` (${name})` : ""}. Reload the page and allow camera access.`,
         );
       }
       return null;
+    }
+  }
+
+  async function requestCameraStream() {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error(INSECURE_CONTEXT_ERROR);
+    }
+    const audio: MediaTrackConstraints = {
+      echoCancellation: { ideal: true },
+      noiseSuppression: { ideal: true },
+      autoGainControl: { ideal: true },
+    };
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: CAMERA_IDEAL_WIDTH },
+          height: { ideal: CAMERA_IDEAL_HEIGHT },
+          frameRate: { ideal: CAPTURE_FPS, max: CAPTURE_FPS },
+          aspectRatio: { ideal: 9 / 16 },
+        },
+        audio,
+      });
+    } catch (cause) {
+      const name = cause instanceof DOMException ? cause.name : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        throw cause;
+      }
+      // Some webcams (often on Windows) refuse the HD request with NotReadableError /
+      // OverconstrainedError but work with default settings.
+      return navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio,
+      });
     }
   }
 
@@ -831,9 +876,7 @@ export function InterviewRecorder({
       setBlurEnabled(false);
       blurEnabledRef.current = false;
       setError(
-        isIosDevice()
-          ? "Background blur could not start on this iPhone/iPad. Try Safari, keep the page open a few seconds after tapping Blur, then try again. You can still record without blur."
-          : "Background blur is not available on this device. You can still record without it.",
+        "Background blur could not load. Check your internet connection and tap Blur again. You can still record without blur.",
       );
     } finally {
       setBlurLoading(false);
@@ -935,9 +978,9 @@ export function InterviewRecorder({
         if (mimeType) {
           recorderOptions.mimeType = mimeType;
         }
-        if (isAndroidDevice()) {
-          recorderOptions.videoBitsPerSecond = ANDROID_VIDEO_BITS_PER_SECOND;
-        }
+        recorderOptions.videoBitsPerSecond = isAndroidDevice()
+          ? ANDROID_VIDEO_BITS_PER_SECOND
+          : VIDEO_BITS_PER_SECOND;
         recorder = new MediaRecorder(recordStream, recorderOptions);
       } catch (err) {
         setError(
@@ -1110,6 +1153,72 @@ export function InterviewRecorder({
     setCaptureRestartKey((key) => key + 1);
   }
 
+  /** Browser → Spaces via presigned URL; returns null if the bucket rejects it (e.g. CORS). */
+  async function uploadDirectToStorage(
+    blob: Blob,
+    mimeType: string,
+    questionId: string,
+  ): Promise<UploadedRecording | null> {
+    try {
+      const signResponse = await fetch("/api/uploads/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          questionId,
+          mimeType,
+          sizeBytes: blob.size,
+        }),
+      });
+      if (!signResponse.ok) {
+        return null;
+      }
+      const signed = (await signResponse.json()) as {
+        key: string;
+        uploadUrl: string;
+      };
+
+      const putResponse = await fetch(signed.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": mimeType },
+        body: blob,
+      });
+      if (!putResponse.ok) {
+        return null;
+      }
+
+      return { key: signed.key, mimeType, sizeBytes: blob.size };
+    } catch {
+      return null;
+    }
+  }
+
+  async function uploadViaServer(
+    blob: Blob,
+    mimeType: string,
+    questionId: string,
+  ): Promise<UploadedRecording> {
+    const extension = mimeType.includes("mp4") ? "mp4" : "webm";
+    const formData = new FormData();
+    formData.append("token", token);
+    formData.append("questionId", questionId);
+    formData.append(
+      "file",
+      new File([blob], `answer.${extension}`, { type: mimeType }),
+    );
+
+    const uploadResponse = await fetch("/api/uploads/file", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error("Upload failed.");
+    }
+
+    return (await uploadResponse.json()) as UploadedRecording;
+  }
+
   async function acceptAnswer() {
     if (!recordedBlob || !currentQuestion) {
       return;
@@ -1120,29 +1229,9 @@ export function InterviewRecorder({
 
     try {
       const mimeType = recordedBlob.type || "video/webm";
-      const extension = mimeType.includes("mp4") ? "mp4" : "webm";
-      const formData = new FormData();
-      formData.append("token", token);
-      formData.append("questionId", currentQuestion.id);
-      formData.append(
-        "file",
-        new File([recordedBlob], `answer.${extension}`, { type: mimeType }),
-      );
-
-      const uploadResponse = await fetch("/api/uploads/file", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error("Upload failed.");
-      }
-
-      const uploaded = (await uploadResponse.json()) as {
-        key: string;
-        mimeType: string;
-        sizeBytes: number;
-      };
+      const uploaded =
+        (await uploadDirectToStorage(recordedBlob, mimeType, currentQuestion.id)) ??
+        (await uploadViaServer(recordedBlob, mimeType, currentQuestion.id));
 
       const finalizeResponse = await fetch("/api/recordings/finalize", {
         method: "POST",
@@ -1295,6 +1384,9 @@ export function InterviewRecorder({
 
   const splitPaneClass =
     "relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-black shadow-sm";
+  // Pane takes the exact 9:16 shape of the recording so the video fills it without black bars.
+  const portraitPaneMdClass =
+    "md:aspect-[9/16] md:h-full md:w-auto md:max-w-full md:justify-self-center";
   const showCameraPlaceholder =
     stepPhase === "capture" &&
     !isRecording &&
@@ -1304,7 +1396,13 @@ export function InterviewRecorder({
       stream.getTracks().some((track) => track.readyState !== "live"));
 
   return (
-    <main className="mx-auto flex h-[100dvh] w-full max-w-lg flex-col px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4">
+    <main
+      className={`mx-auto flex h-[100dvh] w-full max-w-lg flex-col px-3 pt-3 sm:px-4 sm:pt-4 md:max-w-4xl ${
+        stepPhase === "review"
+          ? "pb-[calc(8.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(9rem+env(safe-area-inset-bottom))]"
+          : "pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
+      }`}
+    >
       <header className="mb-2 shrink-0 sm:mb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1345,11 +1443,12 @@ export function InterviewRecorder({
         </div>
       </header>
 
-      <section className="flex min-h-0 flex-1 flex-col gap-2">
+      {/* Phones: question above answer. Laptops/tablets: side by side so both portrait panes stay tall. */}
+      <section className="flex min-h-0 flex-1 flex-col gap-2 md:grid md:grid-cols-2 md:grid-rows-[minmax(0,1fr)] md:gap-3">
         {stepPhase === "capture" ? (
-          <div className={`${splitPaneClass} flex-[1_1_50%]`}>
+          <div className={`${splitPaneClass} flex-[1_1_50%] ${portraitPaneMdClass}`}>
             <video
-              className="h-full w-full bg-black object-contain object-top"
+              className="h-full w-full bg-black object-contain object-top md:object-center"
               muted={false}
               onEnded={onQuestionVideoEnded}
               playsInline
@@ -1387,16 +1486,14 @@ export function InterviewRecorder({
         <div
           className={`${splitPaneClass} ${
             stepPhase === "review"
-              ? "mx-auto w-full max-w-sm flex-[1_1_auto]"
-              : "flex-[1_1_50%]"
+              ? "aspect-[9/16] w-auto max-w-full flex-[1_1_0%] self-center md:col-span-2 md:h-full md:justify-self-center md:self-auto"
+              : `flex-[1_1_50%] ${portraitPaneMdClass}`
           }`}
         >
           <video
             autoPlay
-            className={`w-full bg-black ${
-              stepPhase === "review"
-                ? "aspect-[9/16] h-auto object-contain"
-                : "h-full object-cover"
+            className={`h-full w-full bg-black ${
+              stepPhase === "review" ? "object-contain" : "object-cover"
             }`}
             muted={false}
             playsInline
@@ -1509,11 +1606,11 @@ export function InterviewRecorder({
         </div>
 
         {stepPhase === "capture" ? (
-          <p className="shrink-0 text-center text-[11px] leading-4 text-slate-500 sm:text-xs">
+          <p className="shrink-0 text-center text-[11px] leading-4 text-slate-500 sm:text-xs md:col-span-2">
             {isPreparingCamera
               ? "Starting camera…"
               : questionPlaying
-                ? "Recording your screen + voice. Watch the question on top."
+                ? "Recording your screen + voice. Watch the question."
                 : isRecording
                   ? "Speak your answer, then tap Stop."
                   : "Preparing…"}
@@ -1521,13 +1618,13 @@ export function InterviewRecorder({
         ) : null}
 
         {stepPhase === "review" && recordedBlob && !isProcessing ? (
-          <p className="shrink-0 text-center text-sm text-slate-500">
+          <p className="shrink-0 text-center text-sm text-slate-500 md:col-span-2">
             Preview is your answer only. Retake if needed, then accept.
           </p>
         ) : null}
 
         {error ? (
-          <p className="shrink-0 rounded-xl border border-rose-200 bg-rose-50 p-3 text-center text-sm text-rose-700">
+          <p className="shrink-0 rounded-xl border border-rose-200 bg-rose-50 p-3 text-center text-sm text-rose-700 md:col-span-2">
             {error}
           </p>
         ) : null}

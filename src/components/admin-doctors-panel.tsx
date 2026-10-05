@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { FolderDown, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { DoctorProductionControls } from "@/components/doctor-production-controls";
@@ -131,6 +131,16 @@ function AdminRecordingsSection({ doctor }: { doctor: AdminDoctorRow }) {
           </a>
         );
       })}
+      {doctor.recordings.length > 0 ? (
+        <a
+          className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-md border border-slate-900 bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white transition hover:bg-slate-700"
+          download
+          href={`/api/recordings/zip?doctorId=${doctor.id}`}
+        >
+          <FolderDown className="h-3 w-3" />
+          All (ZIP)
+        </a>
+      ) : null}
     </div>
   );
 }

@@ -16,10 +16,19 @@ import {
 
 const CDN_WASM_ROOT =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
-const SELFIE_MODEL =
+const LOCAL_SELFIE_MODEL = "/models/selfie_segmenter.tflite";
+const CDN_SELFIE_MODEL =
   "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite";
 
-const PERSON_THRESHOLD = 0.45;
+// Soft edge: confidence below LOW is background, above HIGH is person, smooth ramp between.
+const EDGE_LOW = 0.3;
+const EDGE_HIGH = 0.7;
+const MASK_FEATHER_RADIUS = 1;
+// How much of the previous mask to keep; lower when a pixel changes a lot (movement).
+const MASK_KEEP_STILL = 0.55;
+const MASK_KEEP_MOVING = 0.15;
+const CPU_BLUR_DOWNSCALE = 6;
+const CPU_BLUR_RADIUS = 2;
 
 export type BackgroundBlurSession = {
   ensureReady: () => Promise<void>;
@@ -48,10 +57,65 @@ export function isAndroidDevice() {
   return /Android/i.test(navigator.userAgent || "");
 }
 
-function wasmRoot() {
-  if (typeof window === "undefined") return CDN_WASM_ROOT;
+/** Desktop Safari and some WebViews ignore ctx.filter, which would leave the background sharp. */
+function supportsCanvasFilter() {
+  if (typeof document === "undefined") return false;
+  if (!("filter" in CanvasRenderingContext2D.prototype)) return false;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 3;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return false;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, 3, 1);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(1, 0, 1, 1);
+    const probe = document.createElement("canvas");
+    probe.width = 3;
+    probe.height = 1;
+    const probeCtx = probe.getContext("2d", { willReadFrequently: true });
+    if (!probeCtx) return false;
+    probeCtx.filter = "blur(1px)";
+    probeCtx.drawImage(canvas, 0, 0);
+    // A working blur spreads the white centre pixel into its black neighbour.
+    return probeCtx.getImageData(0, 0, 1, 1).data[0] > 0;
+  } catch {
+    return false;
+  }
+}
+
+function localWasmRoot() {
   // Same-origin WASM avoids CDN/CORS flakes on iOS Safari.
   return `${window.location.origin}/mediapipe/wasm`;
+}
+
+/** FilesetResolver never fetches, so a missing file only surfaces later — probe first. */
+async function isReachable(url: string) {
+  try {
+    const response = await fetch(url, { method: "HEAD", cache: "no-store" });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveAssetSources() {
+  const [localWasmOk, localModelOk] = await Promise.all([
+    isReachable(`${localWasmRoot()}/vision_wasm_internal.wasm`),
+    isReachable(LOCAL_SELFIE_MODEL),
+  ]);
+
+  const sources: { wasmRoot: string; model: string }[] = [
+    {
+      wasmRoot: localWasmOk ? localWasmRoot() : CDN_WASM_ROOT,
+      model: localModelOk ? LOCAL_SELFIE_MODEL : CDN_SELFIE_MODEL,
+    },
+  ];
+  if (localWasmOk || localModelOk) {
+    sources.push({ wasmRoot: CDN_WASM_ROOT, model: CDN_SELFIE_MODEL });
+  }
+  return sources;
 }
 
 function coverCropRect(
@@ -146,15 +210,57 @@ function boxBlurImageData(imageData: ImageData, radius: number) {
   }
 }
 
+/** Single-channel separable box blur (running sums) used to feather the mask edge. */
+function featherMask(
+  values: Float32Array,
+  tmp: Float32Array,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.max(1, Math.floor(radius));
+  const size = r * 2 + 1;
+
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    let sum = 0;
+    for (let k = -r; k <= r; k++) {
+      sum += values[row + Math.min(width - 1, Math.max(0, k))];
+    }
+    for (let x = 0; x < width; x++) {
+      tmp[row + x] = sum / size;
+      const out = Math.max(0, x - r);
+      const inn = Math.min(width - 1, x + r + 1);
+      sum += values[row + inn] - values[row + out];
+    }
+  }
+
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    for (let k = -r; k <= r; k++) {
+      sum += tmp[Math.min(height - 1, Math.max(0, k)) * width + x];
+    }
+    for (let y = 0; y < height; y++) {
+      values[y * width + x] = sum / size;
+      const out = Math.max(0, y - r);
+      const inn = Math.min(height - 1, y + r + 1);
+      sum += tmp[inn * width + x] - tmp[out * width + x];
+    }
+  }
+}
+
 function createSession(): BackgroundBlurSession {
   const ios = isIosDevice();
   const android = isAndroidDevice();
-  // Android Chrome struggles with full-rate MediaPipe + canvas encode.
-  const segWidth = ios ? 160 : android ? 192 : 256;
+  // The selfie model always runs at 256px, so a smaller input only loses edge detail.
+  const segWidth = 256;
+  // Background-only work size (it gets blurred anyway); the person is composited at full size.
   const workMaxWidth = ios ? 360 : android ? 400 : 540;
   const blurRadius = ios ? 6 : android ? 6 : 8;
-  const blurPasses = ios ? 2 : 2;
-  const segmentEveryNFrames = ios ? 4 : android ? 3 : 1;
+  const blurPasses = 2;
+  // Android Chrome struggles with full-rate MediaPipe + canvas encode.
+  const segmentEveryNFrames = ios ? 3 : android ? 2 : 1;
+  const useCanvasFilter = !ios && supportsCanvasFilter();
 
   let segmenter: ImageSegmenter | null = null;
   let initPromise: Promise<void> | null = null;
@@ -168,15 +274,20 @@ function createSession(): BackgroundBlurSession {
   const workCanvas = document.createElement("canvas");
   const blurCanvas = document.createElement("canvas");
   const personCanvas = document.createElement("canvas");
-  const maskCanvas = document.createElement("canvas");
   const segCanvas = document.createElement("canvas");
   const maskSourceCanvas = document.createElement("canvas");
+  const smallBlurCanvas = document.createElement("canvas");
 
-  let lastMask: {
+  /** Person probability (already oriented), smoothed over time. */
+  let smoothMask: {
     data: Float32Array;
     width: number;
     height: number;
   } | null = null;
+  let maskImageDirty = false;
+  let alphaBuffer = new Float32Array(0);
+  let featherBuffer = new Float32Array(0);
+  let maskImageData: ImageData | null = null;
 
   function ensureCanvasSize(canvas: HTMLCanvasElement, w: number, h: number) {
     if (canvas.width !== w || canvas.height !== h) {
@@ -187,11 +298,12 @@ function createSession(): BackgroundBlurSession {
 
   async function createSegmenter(
     vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>,
+    model: string,
     delegate: "CPU" | "GPU",
   ) {
     return ImageSegmenter.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath: SELFIE_MODEL,
+        modelAssetPath: model,
         delegate,
       },
       runningMode: "VIDEO",
@@ -200,11 +312,16 @@ function createSession(): BackgroundBlurSession {
     });
   }
 
-  async function loadVision() {
+  async function createFromSource(source: { wasmRoot: string; model: string }) {
+    const vision = await FilesetResolver.forVisionTasks(source.wasmRoot);
+    // iOS GPU masks are broken; Android/desktop GPU can fail on some drivers.
+    if (ios) {
+      return createSegmenter(vision, source.model, "CPU");
+    }
     try {
-      return await FilesetResolver.forVisionTasks(wasmRoot());
+      return await createSegmenter(vision, source.model, "GPU");
     } catch {
-      return FilesetResolver.forVisionTasks(CDN_WASM_ROOT);
+      return createSegmenter(vision, source.model, "CPU");
     }
   }
 
@@ -215,17 +332,19 @@ function createSession(): BackgroundBlurSession {
     if (segmenter) return;
     if (!initPromise) {
       initPromise = (async () => {
-        const vision = await loadVision();
-        let created: ImageSegmenter;
-
-        if (ios) {
-          created = await createSegmenter(vision, "CPU");
-        } else {
+        const sources = await resolveAssetSources();
+        let created: ImageSegmenter | null = null;
+        let lastError: unknown = null;
+        for (const source of sources) {
           try {
-            created = await createSegmenter(vision, "GPU");
-          } catch {
-            created = await createSegmenter(vision, "CPU");
+            created = await createFromSource(source);
+            break;
+          } catch (error) {
+            lastError = error;
           }
+        }
+        if (!created) {
+          throw lastError ?? new Error("Background blur could not load.");
         }
 
         if (disposed) {
@@ -298,25 +417,65 @@ function createSession(): BackgroundBlurSession {
     height: number;
   }) {
     if (invertChecked) return;
+    // The doctor sits in the middle of the portrait frame; the top corners are background.
+    // Only decide once the frame clearly shows that (a black first frame is ambiguous).
+    const { data, width, height } = mask;
+    const regionMean = (x0: number, x1: number, y0: number, y1: number) => {
+      let sum = 0;
+      let count = 0;
+      for (let y = Math.floor(y0); y < Math.floor(y1); y++) {
+        for (let x = Math.floor(x0); x < Math.floor(x1); x++) {
+          sum += data[y * width + x] ?? 0;
+          count++;
+        }
+      }
+      return count ? sum / count : 0;
+    };
+    const center = regionMean(width * 0.35, width * 0.65, height * 0.3, height * 0.7);
+    const corners =
+      (regionMean(0, width * 0.15, 0, height * 0.15) +
+        regionMean(width * 0.85, width, 0, height * 0.15)) /
+      2;
+    if (Math.abs(center - corners) < 0.3) return;
     invertChecked = true;
-    let sum = 0;
-    for (let i = 0; i < mask.data.length; i++) sum += mask.data[i];
-    if (sum / mask.data.length < 0.15) {
-      invertMask = true;
-    }
+    invertMask = center < corners;
   }
 
-  function personAlphaAt(mask: Float32Array, index: number) {
-    const raw = mask[index] ?? 0;
-    const value = invertMask ? 1 - raw : raw;
-    return value >= PERSON_THRESHOLD ? 1 : 0;
+  function blendIntoSmoothMask(mask: {
+    data: Float32Array;
+    width: number;
+    height: number;
+  }) {
+    const { data, width, height } = mask;
+
+    if (
+      !smoothMask ||
+      smoothMask.width !== width ||
+      smoothMask.height !== height
+    ) {
+      const oriented = new Float32Array(data.length);
+      for (let i = 0; i < data.length; i++) {
+        oriented[i] = invertMask ? 1 - data[i] : data[i];
+      }
+      smoothMask = { data: oriented, width, height };
+      maskImageDirty = true;
+      return;
+    }
+
+    const prev = smoothMask.data;
+    for (let i = 0; i < prev.length; i++) {
+      const next = invertMask ? 1 - data[i] : data[i];
+      const keep = Math.abs(next - prev[i]) > 0.5 ? MASK_KEEP_MOVING : MASK_KEEP_STILL;
+      prev[i] = prev[i] * keep + next * (1 - keep);
+    }
+    maskImageDirty = true;
   }
 
   function updateMaskFromWork(workW: number, workH: number) {
     if (!segmenter) return;
 
     frameCounter += 1;
-    if (lastMask && frameCounter % segmentEveryNFrames !== 0) {
+    if (smoothMask && frameCounter % segmentEveryNFrames !== 0) {
       return;
     }
 
@@ -337,38 +496,48 @@ function createSession(): BackgroundBlurSession {
       const mask = extractPersonConfidence(result);
       if (!mask) return;
       maybeDetectInvert(mask);
-      lastMask = mask;
+      blendIntoSmoothMask(mask);
     } catch {
       // Keep previous mask.
     }
   }
 
-  function paintPersonMask(destW: number, destH: number) {
-    if (!lastMask) return false;
+  /** Rebuilds the small alpha mask image only when a new segmentation arrived. */
+  function paintPersonMask() {
+    if (!smoothMask) return false;
+    if (!maskImageDirty) return true;
 
-    const { data, width: mw, height: mh } = lastMask;
+    const { data, width: mw, height: mh } = smoothMask;
     ensureCanvasSize(maskSourceCanvas, mw, mh);
     const tmpCtx = maskSourceCanvas.getContext("2d");
     if (!tmpCtx) return false;
 
-    const imageData = tmpCtx.createImageData(mw, mh);
-    const pixels = imageData.data;
-    for (let i = 0; i < data.length; i++) {
-      const a = personAlphaAt(data, i) * 255;
-      const o = i * 4;
-      pixels[o] = 255;
-      pixels[o + 1] = 255;
-      pixels[o + 2] = 255;
-      pixels[o + 3] = a;
+    if (alphaBuffer.length !== data.length) {
+      alphaBuffer = new Float32Array(data.length);
+      featherBuffer = new Float32Array(data.length);
     }
-    tmpCtx.putImageData(imageData, 0, 0);
+    const alpha = alphaBuffer;
+    const span = EDGE_HIGH - EDGE_LOW;
+    for (let i = 0; i < data.length; i++) {
+      const t = Math.min(1, Math.max(0, (data[i] - EDGE_LOW) / span));
+      alpha[i] = t * t * (3 - 2 * t);
+    }
+    featherMask(alpha, featherBuffer, mw, mh, MASK_FEATHER_RADIUS);
 
-    ensureCanvasSize(maskCanvas, destW, destH);
-    const maskCtx = maskCanvas.getContext("2d");
-    if (!maskCtx) return false;
-    maskCtx.clearRect(0, 0, destW, destH);
-    maskCtx.imageSmoothingEnabled = true;
-    maskCtx.drawImage(maskSourceCanvas, 0, 0, destW, destH);
+    if (
+      !maskImageData ||
+      maskImageData.width !== mw ||
+      maskImageData.height !== mh
+    ) {
+      maskImageData = tmpCtx.createImageData(mw, mh);
+      maskImageData.data.fill(255);
+    }
+    const pixels = maskImageData.data;
+    for (let i = 0; i < alpha.length; i++) {
+      pixels[i * 4 + 3] = alpha[i] * 255;
+    }
+    tmpCtx.putImageData(maskImageData, 0, 0);
+    maskImageDirty = false;
     return true;
   }
 
@@ -381,20 +550,32 @@ function createSession(): BackgroundBlurSession {
     blurCtx.clearRect(0, 0, workW, workH);
     blurCtx.drawImage(workCanvas, 0, 0);
 
-    if (!ios) {
-      // Desktop/Android: fast canvas filter when available.
+    if (useCanvasFilter) {
       blurCtx.filter = `blur(${blurRadius * 2}px)`;
       blurCtx.drawImage(workCanvas, 0, 0);
       blurCtx.filter = "none";
       return true;
     }
 
-    // iOS: Safari often ignores ctx.filter — blur pixels manually.
-    const imageData = blurCtx.getImageData(0, 0, workW, workH);
+    // iOS / desktop Safari: ctx.filter is ignored — blur a downscaled copy on the
+    // CPU, then scale it back up (cheap enough for phones, and a stronger blur).
+    const smallW = Math.max(1, Math.round(workW / CPU_BLUR_DOWNSCALE));
+    const smallH = Math.max(1, Math.round(workH / CPU_BLUR_DOWNSCALE));
+    ensureCanvasSize(smallBlurCanvas, smallW, smallH);
+    const smallCtx = smallBlurCanvas.getContext("2d", { willReadFrequently: true });
+    if (!smallCtx) return false;
+    smallCtx.imageSmoothingEnabled = true;
+    smallCtx.drawImage(workCanvas, 0, 0, smallW, smallH);
+    const imageData = smallCtx.getImageData(0, 0, smallW, smallH);
     for (let p = 0; p < blurPasses; p++) {
-      boxBlurImageData(imageData, blurRadius);
+      boxBlurImageData(imageData, CPU_BLUR_RADIUS);
     }
-    blurCtx.putImageData(imageData, 0, 0);
+    smallCtx.putImageData(imageData, 0, 0);
+
+    blurCtx.imageSmoothingEnabled = true;
+    blurCtx.imageSmoothingQuality = "high";
+    blurCtx.clearRect(0, 0, workW, workH);
+    blurCtx.drawImage(smallBlurCanvas, 0, 0, workW, workH);
     return true;
   }
 
@@ -446,8 +627,8 @@ function createSession(): BackgroundBlurSession {
     workCtx.drawImage(sharpCanvas, 0, 0, workW, workH);
 
     updateMaskFromWork(workW, workH);
-    const hasMask = paintPersonMask(workW, workH);
-    if (!hasMask || !lastMask || !makeBlurredBackground(workW, workH)) {
+    const hasMask = paintPersonMask();
+    if (!hasMask || !makeBlurredBackground(workW, workH)) {
       dest.save();
       dest.globalCompositeOperation = "source-over";
       dest.filter = "none";
@@ -457,16 +638,18 @@ function createSession(): BackgroundBlurSession {
       return;
     }
 
-    // Safari-safe composite: blurred BG, then sharp person with alpha mask.
-    // Do NOT use source-in / destination-atop on the capture canvas.
-    ensureCanvasSize(personCanvas, workW, workH);
+    // Safari-safe composite: blurred BG, then the full-resolution sharp person with a
+    // smoothly upscaled alpha mask. Do NOT use source-in / destination-atop on the capture canvas.
+    ensureCanvasSize(personCanvas, destWidth, destHeight);
     const personCtx = personCanvas.getContext("2d");
     if (!personCtx) return;
-    personCtx.clearRect(0, 0, workW, workH);
+    personCtx.clearRect(0, 0, destWidth, destHeight);
     personCtx.globalCompositeOperation = "source-over";
-    personCtx.drawImage(workCanvas, 0, 0);
+    personCtx.drawImage(sharpCanvas, 0, 0);
     personCtx.globalCompositeOperation = "destination-in";
-    personCtx.drawImage(maskCanvas, 0, 0);
+    personCtx.imageSmoothingEnabled = true;
+    personCtx.imageSmoothingQuality = "high";
+    personCtx.drawImage(maskSourceCanvas, 0, 0, destWidth, destHeight);
     personCtx.globalCompositeOperation = "source-over";
 
     dest.save();
@@ -475,8 +658,9 @@ function createSession(): BackgroundBlurSession {
     dest.filter = "none";
     dest.globalAlpha = 1;
     dest.clearRect(0, 0, destWidth, destHeight);
+    dest.imageSmoothingEnabled = true;
     dest.drawImage(blurCanvas, 0, 0, destWidth, destHeight);
-    dest.drawImage(personCanvas, 0, 0, destWidth, destHeight);
+    dest.drawImage(personCanvas, 0, 0);
     dest.restore();
   }
 
@@ -488,7 +672,8 @@ function createSession(): BackgroundBlurSession {
       segmenter?.close();
       segmenter = null;
       initPromise = null;
-      lastMask = null;
+      smoothMask = null;
+      maskImageDirty = false;
       invertChecked = false;
       invertMask = false;
       frameCounter = 0;

@@ -105,6 +105,10 @@ export function getSpacesClient() {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
+    // Default checksums get baked into presigned PUT URLs (for an empty body),
+    // which makes browser direct uploads fail signature checks on Spaces.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 }
 

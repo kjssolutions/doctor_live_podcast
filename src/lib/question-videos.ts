@@ -1,7 +1,8 @@
 /**
  * Q1–Q4 question videos (Julius Caesar frames).
- * The interview player uses a same-origin proxy so the recorder can paint
- * question frames onto the canvas (CDN videos cannot be drawn cross-origin).
+ * Played straight from the Spaces CDN so video bandwidth never touches the app
+ * server. Only the doctor camera is painted onto the recording canvas, so the
+ * question video does not need to be same-origin.
  */
 export const SPACES_QUESTION_VIDEOS: Record<number, string> = {
   1: "https://scivision.sgp1.cdn.digitaloceanspaces.com/doctor_live_podcast/questions/question1.mp4",
@@ -15,8 +16,5 @@ export function getQuestionVideoRemoteUrl(order: number) {
 }
 
 export function getQuestionVideoSrc(order: number) {
-  if (SPACES_QUESTION_VIDEOS[order]) {
-    return `/api/question-videos/${order}`;
-  }
-  return `/Videos/question${order}.mp4`;
+  return SPACES_QUESTION_VIDEOS[order] ?? `/Videos/question${order}.mp4`;
 }
